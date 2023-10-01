@@ -1,8 +1,9 @@
 TNX_CSV_PATH = 'D:/EZchain-V2/Ezchain-py/300Txs.csv'
 TNX_CSV_NUM = 300 #csv文件中交易的总数量
-PICK_TXNS_NUM = 1000 #一次打包的交易的数量
+PICK_TXNS_NUM = 5000 #一次打包的交易的数量
 SAMPLE_NEIGHBORS_NUM = 20 #随机链接的邻居节点的数量
 NODE_NUM = 100 #模拟节点的数量
 BANDWIDTH = 1024 * 1024 * 1 #网络带宽
 HASH_DIFFICULTY = 0.00001 #挖矿难度，即，一次hash运算挖矿成功的概率
 HASH_POWER = 100 #哈希算力，表示每秒钟执行的hash次数
+ACCOUNT_NUM = 500 #模拟账户数量

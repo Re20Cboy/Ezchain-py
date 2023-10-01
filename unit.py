@@ -85,15 +85,16 @@ class MerkleTree:
     def getRootHash(self) -> str:
         return self.root.value
 
-    def checkTree(self):
-        node = self.root
+    def checkTree(self, node = None):
+        if node is None:
+            node = self.root
         if node.left != None and node.right != None: #不是叶子节点
             #tmp = MerkleTreeNode.hash(node.left.value + node.right.value)
             #tmp2 = node.value
             if node.value != MerkleTreeNode.hash(node.left.value + node.right.value):
                 return False
             else:
-                self.checkTree()
+                return (self.checkTree(node=node.left) and self.checkTree(node=node.right))
         else: #是叶子节点
             if node.value != MerkleTreeNode.hash(node.content):
                 return False

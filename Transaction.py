@@ -4,9 +4,22 @@ import csv
 from const import *
 
 class AccountTxns:
-    def __init__(self, sender):
+    def __init__(self, sender, accTxns):
         self.Sender = sender
-        self.TxnsHash = []
+        self.AccTxnsHash = None
+        self.AccTxns = accTxns
+
+    def Encode(self):
+        encoded_tx = pickle.dumps(self)
+        return encoded_tx
+    @staticmethod
+    def Decode(to_decode):
+        decoded_tx = pickle.loads(to_decode)
+        return decoded_tx
+
+    def checkTxns(self):
+        pass
+
 
 
 class Transaction:
@@ -27,7 +40,8 @@ class Transaction:
         #self.RawTxHash = None
 
     def checkTxn(self): #todo:
-        pass
+        #验证数字签名是否正确
+        return True
 
     def PrintTx(self):
         vals = [self.Sender, self.Recipient, self.Value, self.TxHash]
