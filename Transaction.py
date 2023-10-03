@@ -18,6 +18,7 @@ class AccountTxns:
         return decoded_tx
 
     def checkTxns(self):
+        #todo:1.保证交易的签名的正确性；2.保证交易在一个accTxns内无双花
         pass
 
 
@@ -31,6 +32,7 @@ class Transaction:
         self.Value = value
         self.TxHash = tx_hash
         self.Time = time
+
 
         #self.Relayed = False
         #self.HasBroker = False

@@ -118,6 +118,9 @@ class EZsimulate:
             selected_element = random.choices(elements, probabilities, k=1)[0]
             return selected_element
 
+        def brd_txn_prf_2_acc():
+            pass
+
         #随机winner的挖矿时间，并添加记录
         print('Begin mining...')
         mine_time_samples = np.random.geometric(self.hashDifficulty*self.hashPower[0], size=self.nodeNum)
@@ -145,6 +148,9 @@ class EZsimulate:
             else:
                 print('Block body broadcast cost ' + str(block_body_brd_delay) + 's')
 
+            # 将区块中的证据广播给相应的用户
+
+
 if __name__ == "__main__":
     #初始化设置
     EZsimulate = EZsimulate()
@@ -164,18 +170,14 @@ if __name__ == "__main__":
     for i in range(len(EZsimulate.AccTxns)):
         EZsimulate.accounts[i].accTxns = EZsimulate.AccTxns[i]
 
-    #Node打包收集所有交易形成区块body
+    # Node打包收集所有交易形成区块body（可以理解为简单的打包交易）
     blockBodyMsg = EZsimulate.generate_block_body()
 
+    # 初始化p2p网络
     EZsimulate.init_network()
     print('network:')
     print(EZsimulate.network.delay_matrix)
 
-    # 记录程序开始时间
-    start_time = time.time()
     # 挖矿模拟
     EZsimulate.begin_mine(blockBodyMsg)
-    # 记录程序结束时间
-    end_time = time.time()
-    # 计算程序运行时间
-    run_time = end_time - start_time
+
