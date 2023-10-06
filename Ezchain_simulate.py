@@ -1,3 +1,4 @@
+import Block
 import Blockchain
 import Message
 import Network
@@ -14,7 +15,7 @@ from pympler import asizeof
 
 class EZsimulate:
     def __init__(self):
-        self.blockchain = Blockchain.Blockchain()
+        self.blockchain = None
         self.mineTime = []
         self.nodeList = []
         self.hashPower = []
@@ -45,6 +46,26 @@ class EZsimulate:
         self.network.random_set_delay_matrix(len(self.nodeList))
 
     def random_generate_AccTxns(self, numTxns = PICK_TXNS_NUM):
+        def distribute_transactions(X, Y): #将X个交易均匀分配给Y个账户
+            base_allocation = X // Y
+            remaining_transactions = X % Y
+            allocations = [base_allocation] * Y
+            for i in range(remaining_transactions):
+                allocations[i] += 1
+            return allocations
+
+        randomAccNum = random.randrange(ACCOUNT_NUM // 2, ACCOUNT_NUM)  # 随机生成参与交易的账户数
+        accountTxns = []
+        allocations = distribute_transactions(numTxns, randomAccNum)
+        for i in range(randomAccNum):#随机账户数量
+            allocTxnsNum = allocations[i] # 读取本次要读取的交易数量
+            randomRecipients = random.sample(self.accounts, allocTxnsNum) # 随机生成本轮账户i需要转发的对象账户
+            tmpAccTxn = self.accounts[i].random_generate_txns(randomRecipients)
+            accountTxns.append(Transaction.AccountTxns(self.accounts[i].addr, tmpAccTxn))
+
+        return accountTxns
+
+    def old_random_generate_AccTxns(self, numTxns = PICK_TXNS_NUM):
 
         def distribute_transactions(X, Y): #将X个交易均匀分配给Y个账户
             base_allocation = X // Y
@@ -76,7 +97,7 @@ class EZsimulate:
                         tmpRecipient = row[4]
                         tmpNonce = 0  # 待补全
                         tmpSig = unit.generate_signature(tmpSender)  # 待补全
-                        tmpValue = row[8]
+                        tmpValue = random.randint(1, 1000) # 原来为row[8]，根据值转移思想，现改为随机生成一个1-1000的整数
                         tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                          nonce=tmpNonce, signature=tmpSig, value=tmpValue,
                                                          tx_hash=tmpTxnHash, time=tmpTime)
@@ -90,7 +111,6 @@ class EZsimulate:
         allocations = distribute_transactions(numTxns, randomAccNum)
         Txns = readCSVTxns()
         for i in range(randomAccNum):#随机账户数量
-            elements = []
             allocTxnsNum = allocations[i] #读取本次要读取的交易数量
             elements = Txns[:allocTxnsNum] #读取Txns中相应的元素
             Txns = Txns[allocTxnsNum:] #截取Txns
@@ -101,6 +121,34 @@ class EZsimulate:
             accountTxns.append(Transaction.AccountTxns(self.accounts[i].addr, elements))
 
         return accountTxns
+
+    def generate_GenesisBlock(self):
+        v_genesis_begin = '0x77777777777777777777777777777777777777777777777777777777777777777' # 65位16进制
+        v_genesis_num = 100000000 # 初始化每个账户1亿个token（最小单位）
+        genesisAccTxns = []
+        for i in range(len(self.accounts)):
+            if i > 0:
+                v_genesis_begin = int(v_genesis_begin, 16) + v_genesis_num*i + 1
+                v_genesis_begin = hex(v_genesis_begin)
+            V = unit.Value(beginIndex=v_genesis_begin, valueNum=v_genesis_num)
+            Txn = Transaction.Transaction(sender=GENESIS_SENDER, recipient=self.accounts[i].addr,
+                                                         nonce=0, signature='GENESIS_SIG', value=V,
+                                                         tx_hash=0, time=0)
+            genesisAccTxns.append(Txn)
+        # 生成创世块
+        GAccTxns = Transaction.AccountTxns(GENESIS_SENDER, genesisAccTxns)
+        encodedGAccTxns = []
+        for item in GAccTxns.AccTxns:
+            encodedGAccTxns.append(item.Encode())
+        preBlockHash = '0x7777777'
+        blockIndex = 0
+        genesisMTree = unit.MerkleTree(encodedGAccTxns)
+        mTreeRoot = genesisMTree.getRootHash()
+        genesisBlock = Block.Block(index=blockIndex, mTreeRoot = mTreeRoot, miner = GENESIS_MINER_ID, prehash = preBlockHash)
+        genesisBlockMsg = Message.BlockMsg(genesisBlock)
+        genesisBlockBodyMsg = Message.BlockBodyMsg(genesisMTree, genesisAccTxns)
+        # 将创世块加入区块链中
+        self.blockchain = Blockchain.Blockchain(genesisBlock)
 
     def generate_block(self):
         pass
@@ -165,7 +213,11 @@ if __name__ == "__main__":
     EZsimulate.random_generate_accounts()
     #print('accounts:')
 
+    # 根据账户生成创世块（给每个账户分发token）
+    EZsimulate.generate_GenesisBlock()
+
     #随机给账户节点分配交易（可能有一些账户没有交易，因为参加交易的账户的数量是随机的）
+    # EZsimulate.AccTxns = EZsimulate.old_random_generate_AccTxns()
     EZsimulate.AccTxns = EZsimulate.random_generate_AccTxns()
     for i in range(len(EZsimulate.AccTxns)):
         EZsimulate.accounts[i].accTxns = EZsimulate.AccTxns[i]

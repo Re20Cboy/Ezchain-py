@@ -10,7 +10,7 @@ class AccountTxns:
         self.AccTxns = accTxns
 
     def Encode(self):
-        encoded_tx = pickle.dumps(self)
+        encoded_tx = pickle.dumps(self.AccTxns)
         return encoded_tx
     @staticmethod
     def Decode(to_decode):
@@ -28,7 +28,7 @@ class Transaction:
         self.Sender = sender
         self.Recipient = recipient
         self.Nonce = nonce
-        self.Signature = signature  # not implemented now.
+        self.Signature = signature  # todo:not implemented now.
         self.Value = value
         self.TxHash = tx_hash
         self.Time = time

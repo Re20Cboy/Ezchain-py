@@ -35,7 +35,6 @@ class Value: # 针对VCB区块链的专门设计的值结构，总量2^259 = 16^
         return True
 
     def isInValue(self, target): # target是Value类型, 判断target是否和本value有交集
-        # todo: check target is in this value? target is also a value
         decimal_targetBegin = int(target.beginIndex, 16)
         decimal_targetEnd = int(target.endIndex, 16)
         decimal_beginIndex = self.get_decimal_beginIndex()
