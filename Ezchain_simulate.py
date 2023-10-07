@@ -56,14 +56,19 @@ class EZsimulate:
 
         randomAccNum = random.randrange(ACCOUNT_NUM // 2, ACCOUNT_NUM)  # 随机生成参与交易的账户数
         accountTxns = []
+        accountTxnsRecipientList = []
         allocations = distribute_transactions(numTxns, randomAccNum)
-        for i in range(randomAccNum):#随机账户数量
+        for i in range(randomAccNum):#随机本轮发起交易的账户数量
             allocTxnsNum = allocations[i] # 读取本次要读取的交易数量
-            randomRecipients = random.sample(self.accounts, allocTxnsNum) # 随机生成本轮账户i需要转发的对象账户
+            randomRecipientsIndexList = random.sample(range(len(self.accounts)), allocTxnsNum) # 随机生成本轮账户i需要转发的对象账户的索引
+            randomRecipients = []
+            for tmp in randomRecipientsIndexList:
+                randomRecipients.append(self.accounts[tmp])
             tmpAccTxn = self.accounts[i].random_generate_txns(randomRecipients)
             accountTxns.append(Transaction.AccountTxns(self.accounts[i].addr, tmpAccTxn))
-
-        return accountTxns
+            self.accounts[i].accTxnsIndex = i # 设置账户对于其提交交易在区块中位置的索引
+            accountTxnsRecipientList.append(randomRecipientsIndexList)
+        return accountTxns, accountTxnsRecipientList
 
     def old_random_generate_AccTxns(self, numTxns = PICK_TXNS_NUM):
 
@@ -149,6 +154,12 @@ class EZsimulate:
         genesisBlockBodyMsg = Message.BlockBodyMsg(genesisMTree, genesisAccTxns)
         # 将创世块加入区块链中
         self.blockchain = Blockchain.Blockchain(genesisBlock)
+        # 生成每个创世块中的proof
+        for count, acc in enumerate(self.accounts, start=0):
+            tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=[GAccTxns] ,ownerMTreePrfList=[genesisMTree.prfList[count]])
+            tmpPrf = unit.Proof([tmpPrfUnit])
+            tmpVPPair = (genesisAccTxns[count].Value, tmpPrf)
+            acc.ValuePrfPair.append(tmpVPPair)
 
     def generate_block(self):
         pass
@@ -198,6 +209,10 @@ class EZsimulate:
 
             # 将区块中的证据广播给相应的用户
 
+    def sendPrf(self, recipientList):
+        for sender in recipientList: # 循环所有sender
+            for recipient in sender: # 循环所有recipient
+                self.accounts[recipient] # todo:调用recipient的接收函数
 
 if __name__ == "__main__":
     #初始化设置
@@ -216,9 +231,12 @@ if __name__ == "__main__":
     # 根据账户生成创世块（给每个账户分发token）
     EZsimulate.generate_GenesisBlock()
 
+    # 更新account本地的数据
+
+
     #随机给账户节点分配交易（可能有一些账户没有交易，因为参加交易的账户的数量是随机的）
-    # EZsimulate.AccTxns = EZsimulate.old_random_generate_AccTxns()
-    EZsimulate.AccTxns = EZsimulate.random_generate_AccTxns()
+    # EZsimulate.AccTxns = EZsimulate.old_random_generate_AccTxns() # 弃用
+    EZsimulate.AccTxns, ACTxnsRecipientList = EZsimulate.random_generate_AccTxns()
     for i in range(len(EZsimulate.AccTxns)):
         EZsimulate.accounts[i].accTxns = EZsimulate.AccTxns[i]
 
@@ -233,3 +251,8 @@ if __name__ == "__main__":
     # 挖矿模拟
     EZsimulate.begin_mine(blockBodyMsg)
 
+    # sender将交易添加至自己的本地数据库中
+    # todo:更新所有在持值的proof；
+
+
+    # sender将证明发送给recipient

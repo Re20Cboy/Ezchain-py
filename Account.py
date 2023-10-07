@@ -12,10 +12,12 @@ class Account:
         self.addr = None
         self.privateKey = None
         self.publicKey = None
-        self.txnPrfPair = [] # 当前账户拥有的交易和对应的证据对
-        self.prfChain = [] # 此账户所有证明的集合，即，公链上所有和本账户相关的prf集合
+        self.ValuePrfPair = [] # 当前账户拥有的值和对应的证据对
+        # self.prfChain = [] # 此账户所有证明的集合，即，公链上所有和本账户相关的prf集合
         self.bloomPrf = [] # 被bloom过滤器“误伤”时，提供证据（哪些账户可以生成此bloom）表明自己的“清白”。
         self.accTxns = [] # 本账户本轮提交的交易集合
+        self.accTxnsIndex = None # 本账户本轮提交的交易集合在blockbody中的编号位置，用于提取交易证明
+
 
     def generate_random_account(self):
         # 生成随机地址
@@ -49,6 +51,14 @@ class Account:
         self.accTxns = accTxns
         return accTxns
 
+    def receipt_txn_and_prf(self):
+        # todo:接收函数的后续处理
+        pass
     def generate_txn_prf_when_use(self, begin_index, end_index): # begin_index, end_index分别表示此txn在本账户手中开始的区块号和结束的区块号
-        # todo: 随机生成交易
+        # todo: 根据交易、区块等input，生成目标交易的proof。
+        # proof = 原证明 + 新生成的证明（在此account时期内的证明）
+        # proof单元的数据结构：（区块号，mTree证明）
+        # 生成new proof（在此account时期内的证明）
+        new_proof = []
+
         pass
