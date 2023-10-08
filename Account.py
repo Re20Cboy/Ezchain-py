@@ -12,11 +12,22 @@ class Account:
         self.addr = None
         self.privateKey = None
         self.publicKey = None
-        self.ValuePrfPair = [] # 当前账户拥有的值和对应的证据对
+        self.ValuePrfBlockPair = [] # 当前账户拥有的值和对应的证据对
         # self.prfChain = [] # 此账户所有证明的集合，即，公链上所有和本账户相关的prf集合
         self.bloomPrf = [] # 被bloom过滤器“误伤”时，提供证据（哪些账户可以生成此bloom）表明自己的“清白”。
         self.accTxns = [] # 本账户本轮提交的交易集合
         self.accTxnsIndex = None # 本账户本轮提交的交易集合在blockbody中的编号位置，用于提取交易证明
+        self.balance = 0 # 统计账户Value计算余额
+
+
+    def add_VPBpair(self, item):
+        self.ValuePrfBlockPair.append(item)
+        # 更新余额
+        self.balance += item[0].valueNum
+    def delete_VPBpair(self,index):
+        # 更新余额
+        self.balance -= self.ValuePrfBlockPair[index][0].valueNum
+        del self.ValuePrfBlockPair[index]
 
 
     def generate_random_account(self):
@@ -35,6 +46,37 @@ class Account:
         )
 
     def random_generate_txns(self, randomRecipients):
+        def pick_values_and_generate_txns(V, tmpSender, tmpRecipient, tmpNonce, tmpSig, tmpTxnHash, tmpTime): # V为int，是要挑拣的值的总量
+            tmpCost = 0 # 动态记录要消耗多少值
+            count = -1
+            txn_2_sender = None
+            txn_2_recipient = None
+
+            for VPBpair in self.ValuePrfBlockPair:
+                value = VPBpair[0]
+                tmpCost += value.valueNum
+                if tmpCost >= V: # 满足值的需求了，花费到此value为止
+                    break
+                count += 1
+
+            change = tmpCost-V # 计算找零
+
+            if change > 0:  # 需要找零，对值进行分割
+                V1, V2 = self.ValuePrfBlockPair[costIndex][0].split_value(change)
+                tmpP = self.ValuePrfBlockPair[costIndex][1]
+                tmpB = self.ValuePrfBlockPair[costIndex][2]
+                self.delete_VPBpair(costIndex)
+                self.add_VPBpair((V1, tmpP, tmpB))
+                self.add_VPBpair((V2, tmpP, tmpB))
+                #创建找零的交易
+                txn_2_sender = Transaction.Transaction(sender=tmpSender, recipient=tmpSender,
+                                                 nonce=tmpNonce, signature=tmpSig, value=V2,
+                                                 tx_hash=tmpTxnHash, time=tmpTime)
+                txn_2_recipient = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                                                 nonce=tmpNonce, signature=tmpSig, value=V1,
+                                                 tx_hash=tmpTxnHash, time=tmpTime)
+            return count, txn_2_sender, txn_2_recipient
+
         accTxns = []
         for item in randomRecipients:
             tmpTime = str(datetime.datetime.now())
@@ -43,11 +85,24 @@ class Account:
             tmpRecipient = item.addr
             tmpNonce = 0  # 待补全
             tmpSig = unit.generate_signature(tmpSender)  # todo: 交易的签名待补全
-            tmpValue = random.randint(1, 1000)  # 原来为row[8]，根据值转移思想，现改为随机生成一个1-1000的整数
-            tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
-                                             nonce=tmpNonce, signature=tmpSig, value=tmpValue,
-                                             tx_hash=tmpTxnHash, time=tmpTime)
-            accTxns.append(tmpTxn)
+            tmpV = 0
+            if self.balance > 0: # 余额大于0时才能交易！
+                tmpV = random.randint(1, 1000)  # 原来为row[8]，根据值转移思想，现改为随机生成一个1-1000的整数
+                while tmpV > self.balance:
+                    tmpV = random.randint(1, self.balance)
+            costIndex, changeTxn2Sender, changeTxn2Recipient = pick_values_and_generate_txns(tmpV, tmpSender, tmpRecipient, tmpNonce, tmpSig, tmpTxnHash, tmpTime) # 花费的值和找零
+            if costIndex >= 0: # 表示有不需要拆分就被cost掉的value
+                tmpValues = []
+                for i in range(costIndex):
+                    tmpValues.append(self.ValuePrfBlockPair[i][0])
+                tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                                                 nonce=tmpNonce, signature=tmpSig, value=tmpValues,
+                                                 tx_hash=tmpTxnHash, time=tmpTime)
+                accTxns.append(tmpTxn)
+            # 所有cost的值都是要拆分的
+            accTxns.append(changeTxn2Sender)
+            accTxns.append(changeTxn2Recipient)
+
         self.accTxns = accTxns
         return accTxns
 

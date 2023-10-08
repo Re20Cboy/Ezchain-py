@@ -64,7 +64,7 @@ class EZsimulate:
             randomRecipients = []
             for tmp in randomRecipientsIndexList:
                 randomRecipients.append(self.accounts[tmp])
-            tmpAccTxn = self.accounts[i].random_generate_txns(randomRecipients)
+            tmpAccTxn = self.accounts[i].random_generate_txns(randomRecipients) # todo:实现真正的Value转移
             accountTxns.append(Transaction.AccountTxns(self.accounts[i].addr, tmpAccTxn))
             self.accounts[i].accTxnsIndex = i # 设置账户对于其提交交易在区块中位置的索引
             accountTxnsRecipientList.append(randomRecipientsIndexList)
@@ -158,8 +158,8 @@ class EZsimulate:
         for count, acc in enumerate(self.accounts, start=0):
             tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=[GAccTxns] ,ownerMTreePrfList=[genesisMTree.prfList[count]])
             tmpPrf = unit.Proof([tmpPrfUnit])
-            tmpVPPair = (genesisAccTxns[count].Value, tmpPrf)
-            acc.ValuePrfPair.append(tmpVPPair)
+            tmpVPBPair = (genesisAccTxns[count].Value, tmpPrf, genesisBlock.index) # V-P-B对
+            acc.ValuePrfBlockPair.add_VPBpair(tmpVPBPair)
 
     def generate_block(self):
         pass
@@ -209,6 +209,18 @@ class EZsimulate:
 
             # 将区块中的证据广播给相应的用户
 
+    def updateSenderVPBpair(self):
+        for i, accTxns in enumerate(self.AccTxns, start=0):
+            sender = accTxns.Sender
+            senderTxns = accTxns.AccTxns
+            # 提取senderTxns中的每个交易涉及到的每个值
+
+            tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=[GAccTxns],
+                                        ownerMTreePrfList=[genesisMTree.prfList[count]])
+            tmpPrf = unit.Proof([tmpPrfUnit])
+            tmpVPBPair = (genesisAccTxns[count].Value, tmpPrf, genesisBlock.index)  # V-P-B对
+            acc.ValuePrfBlockPair.add_VPBpair(tmpVPBPair)
+
     def sendPrf(self, recipientList):
         for sender in recipientList: # 循环所有sender
             for recipient in sender: # 循环所有recipient
@@ -228,14 +240,12 @@ if __name__ == "__main__":
     EZsimulate.random_generate_accounts()
     #print('accounts:')
 
-    # 根据账户生成创世块（给每个账户分发token）
+    # 根据账户生成创世块（给每个账户分发token），并更新account本地的数据（V-P-B pair）
     EZsimulate.generate_GenesisBlock()
 
-    # 更新account本地的数据
-
-
-    #随机给账户节点分配交易（可能有一些账户没有交易，因为参加交易的账户的数量是随机的）
+    # 账户节点随机生成交易（可能有一些账户没有交易，因为参加交易的账户的数量是随机的）
     # EZsimulate.AccTxns = EZsimulate.old_random_generate_AccTxns() # 弃用
+    # EZsimulate.AccTxns为AccountTxns的list
     EZsimulate.AccTxns, ACTxnsRecipientList = EZsimulate.random_generate_AccTxns()
     for i in range(len(EZsimulate.AccTxns)):
         EZsimulate.accounts[i].accTxns = EZsimulate.AccTxns[i]
@@ -252,7 +262,8 @@ if __name__ == "__main__":
     EZsimulate.begin_mine(blockBodyMsg)
 
     # sender将交易添加至自己的本地数据库中
-    # todo:更新所有在持值的proof；
+    # todo:更新所有在持值的proof（V-P-B pair）
+
 
 
     # sender将证明发送给recipient

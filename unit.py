@@ -27,6 +27,12 @@ class Value: # 针对VCB区块链的专门设计的值结构，总量2^259 = 16^
     def get_decimal_endIndex(self):
         return int(self.endIndex, 16)
 
+    def split_value(self, change): # 对此值进行分割
+        V1 = Value(self.beginIndex, self.valueNum-change)
+        tmpIndex = hex(V1.get_decimal_endIndex()+1)
+        V2 = Value(tmpIndex, change)
+        return V1, V2 # V2是找零
+
     def getEndIndex(self, beginIndex, valueNum):
         decimal_number = int(beginIndex, 16)
         result = decimal_number + valueNum
