@@ -102,7 +102,7 @@ class EZsimulate:
                         tmpRecipient = row[4]
                         tmpNonce = 0  # 待补全
                         tmpSig = unit.generate_signature(tmpSender)  # 待补全
-                        tmpValue = random.randint(1, 1000) # 原来为row[8]，根据值转移思想，现改为随机生成一个1-1000的整数
+                        tmpValue = random.randint(1, 100) # 原来为row[8]，根据值转移思想，现改为随机生成一个1-1000的整数
                         tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                          nonce=tmpNonce, signature=tmpSig, value=tmpValue,
                                                          tx_hash=tmpTxnHash, time=tmpTime)
@@ -158,8 +158,8 @@ class EZsimulate:
         for count, acc in enumerate(self.accounts, start=0):
             tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=[GAccTxns] ,ownerMTreePrfList=[genesisMTree.prfList[count]])
             tmpPrf = unit.Proof([tmpPrfUnit])
-            tmpVPBPair = (genesisAccTxns[count].Value, tmpPrf, genesisBlock.index) # V-P-B对
-            acc.ValuePrfBlockPair.add_VPBpair(tmpVPBPair)
+            tmpVPBPair = [[genesisAccTxns[count].Value, 0], tmpPrf, genesisBlock.index] # V-P-B对
+            acc.add_VPBpair(tmpVPBPair)
 
     def generate_block(self):
         pass
@@ -215,11 +215,11 @@ class EZsimulate:
             senderTxns = accTxns.AccTxns
             # 提取senderTxns中的每个交易涉及到的每个值
 
-            tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=[GAccTxns],
-                                        ownerMTreePrfList=[genesisMTree.prfList[count]])
-            tmpPrf = unit.Proof([tmpPrfUnit])
-            tmpVPBPair = (genesisAccTxns[count].Value, tmpPrf, genesisBlock.index)  # V-P-B对
-            acc.ValuePrfBlockPair.add_VPBpair(tmpVPBPair)
+            #tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=[GAccTxns],
+                                        #ownerMTreePrfList=[genesisMTree.prfList[count]])
+            #tmpPrf = unit.Proof([tmpPrfUnit])
+            #tmpVPBPair = (genesisAccTxns[count].Value, tmpPrf, genesisBlock.index)  # V-P-B对
+            #acc.ValuePrfBlockPair.add_VPBpair(tmpVPBPair)
 
     def sendPrf(self, recipientList):
         for sender in recipientList: # 循环所有sender
