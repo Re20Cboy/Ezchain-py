@@ -156,9 +156,9 @@ class EZsimulate:
         self.blockchain = Blockchain.Blockchain(genesisBlock)
         # 生成每个创世块中的proof
         for count, acc in enumerate(self.accounts, start=0):
-            tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=[GAccTxns] ,ownerMTreePrfList=[genesisMTree.prfList[count]])
+            tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=GAccTxns ,ownerMTreePrfList=genesisMTree.prfList[count])
             tmpPrf = unit.Proof([tmpPrfUnit])
-            tmpVPBPair = [[genesisAccTxns[count].Value, 0], tmpPrf, genesisBlock.index] # V-P-B对
+            tmpVPBPair = [genesisAccTxns[count].Value, tmpPrf, genesisBlock.index] # V-P-B对
             acc.add_VPBpair(tmpVPBPair)
 
     def generate_block(self):
@@ -209,17 +209,32 @@ class EZsimulate:
 
             # 将区块中的证据广播给相应的用户
 
-    def updateSenderVPBpair(self):
+    def updateSenderVPBpair(self, mTree):
+        count = 0 # 用于跟踪记录prfList的index
         for i, accTxns in enumerate(self.AccTxns, start=0):
-            sender = accTxns.Sender
+            sender = accTxns.Sender # sender的account类型为self.accounts[i]
             senderTxns = accTxns.AccTxns
             # 提取senderTxns中的每个交易涉及到的每个值
-
-            #tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=[GAccTxns],
-                                        #ownerMTreePrfList=[genesisMTree.prfList[count]])
-            #tmpPrf = unit.Proof([tmpPrfUnit])
-            #tmpVPBPair = (genesisAccTxns[count].Value, tmpPrf, genesisBlock.index)  # V-P-B对
-            #acc.ValuePrfBlockPair.add_VPBpair(tmpVPBPair)
+            owner = sender
+            ownerAccTxnsList = senderTxns
+            ownerMTreePrfList = mTree.prfList[count]
+            count += 1
+            costValueIndex = [] # 用于记录本轮中所有参与交易的值的VPB对的index
+            for txn in senderTxns:
+                # 交易会引起所有Value的prf的变化
+                recipient = txn.Recipient
+                for v in txn.Value:
+                    index = self.accounts[i].find_VPBpair_via_V(txn.Value)
+                    costValueIndex += index
+                    prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
+                                             ownerMTreePrfList=ownerMTreePrfList)
+                    for item in index:
+                        self.accounts[i].ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
+            for j, VPBpair in enumerate(self.accounts[i].ValuePrfBlockPair, start=0):
+                if j not in costValueIndex:
+                    prfUnit = unit.ProofUnit(owner=owner, ownerAccTxnsList=ownerAccTxnsList,
+                                             ownerMTreePrfList=ownerMTreePrfList)
+                    self.accounts[i].ValuePrfBlockPair[j][1].add_prf_unit(prfUnit)
 
     def sendPrf(self, recipientList):
         for sender in recipientList: # 循环所有sender
@@ -263,7 +278,7 @@ if __name__ == "__main__":
 
     # sender将交易添加至自己的本地数据库中
     # todo:更新所有在持值的proof（V-P-B pair）
-
+    EZsimulate.updateSenderVPBpair(blockBodyMsg.info)
 
 
     # sender将证明发送给recipient

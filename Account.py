@@ -18,20 +18,31 @@ class Account:
         self.accTxns = [] # 本账户本轮提交的交易集合
         self.accTxnsIndex = None # 本账户本轮提交的交易集合在blockbody中的编号位置，用于提取交易证明
         self.balance = 0 # 统计账户Value计算余额
+        self.costedValues = [] # 用于记录本轮已花销的Values
 
 
     def add_VPBpair(self, item):
         self.ValuePrfBlockPair.append(item)
         # 更新余额
-        self.balance += item[0][0].valueNum
+        self.balance += item[0].valueNum
     def delete_VPBpair(self, index):
         # 更新余额
-        self.balance -= self.ValuePrfBlockPair[index][0][0].valueNum
+        self.balance -= self.ValuePrfBlockPair[index][0].valueNum
         del self.ValuePrfBlockPair[index]
         # 更新索引
-        for item in self.ValuePrfBlockPair:
-            item[0][1] = self.ValuePrfBlockPair.index(item)
+        # for item in self.ValuePrfBlockPair:
+            # item[0][1] = self.ValuePrfBlockPair.index(item)
 
+    def find_VPBpair_via_V(self, V): # 注意V是Value list
+        index = []
+        for value in V:
+            for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
+                if value is VPBpair[0]:
+                    index.append(i)
+        if index is not []:
+            return index
+        else:
+            raise ValueError("未找到对应的Value")
 
     def generate_random_account(self):
         # 生成随机地址
@@ -53,37 +64,43 @@ class Account:
             if V < 1:
                 raise ValueError("参数V不能小于1")
             tmpCost = 0 # 动态记录要消耗多少值
-            count = 0
+            costList = [] # 记录消耗的Value的index
+            changeValueIndex = 0 # 记录找零值的索引
             txn_2_sender = None
             txn_2_recipient = None
 
-            for VPBpair in self.ValuePrfBlockPair:
-                value = VPBpair[0][0]
+            for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
+                value = VPBpair[0]
+                if value in self.costedValues:
+                    continue
                 tmpCost += value.valueNum
                 if tmpCost >= V: # 满足值的需求了，花费到此value为止
-                    count += 1
+                    changeValueIndex = i
+                    costList.append(i)
                     break
-                count += 1
+                changeValueIndex = i
+                costList.append(i)
 
             change = tmpCost-V # 计算找零
 
             if change > 0:  # 需要找零，对值进行分割
-                V1, V2 = self.ValuePrfBlockPair[count-1][0][0].split_value(change)
-                tmpP = self.ValuePrfBlockPair[count-1][1]
-                tmpB = self.ValuePrfBlockPair[count-1][2]
-                self.delete_VPBpair(count-1)
-                coupleV1 = [V1, len(self.ValuePrfBlockPair)]
-                coupleV2 = [V2, len(self.ValuePrfBlockPair)]
-                self.add_VPBpair([coupleV1, tmpP, tmpB])
-                self.add_VPBpair([coupleV2, tmpP, tmpB])
+                V1, V2 = self.ValuePrfBlockPair[changeValueIndex][0].split_value(change) # V2是找零
+                tmpP = self.ValuePrfBlockPair[changeValueIndex][1]
+                tmpB = self.ValuePrfBlockPair[changeValueIndex][2]
+                # self.delete_VPBpair(changeValueIndex)
+                # todo:V1在本轮的后续交易中都不可再使用
+                # self.add_VPBpair([V1, tmpP, tmpB])
+                # self.add_VPBpair([V2, tmpP, tmpB])
                 #创建找零的交易
                 txn_2_sender = Transaction.Transaction(sender=tmpSender, recipient=tmpSender,
-                                                 nonce=tmpNonce, signature=tmpSig, value=coupleV2,
+                                                 nonce=tmpNonce, signature=tmpSig, value=[V2],
                                                  tx_hash=tmpTxnHash, time=tmpTime)
                 txn_2_recipient = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
-                                                 nonce=tmpNonce, signature=tmpSig, value=coupleV1,
+                                                 nonce=tmpNonce, signature=tmpSig, value=[V1],
                                                  tx_hash=tmpTxnHash, time=tmpTime)
-            return count, txn_2_sender, txn_2_recipient
+                self.costedValues.append(V1)
+                self.costedValues.append(V2)
+            return costList, changeValueIndex, txn_2_sender, txn_2_recipient
 
         accTxns = []
         tmpBalance = self.balance
@@ -99,11 +116,12 @@ class Account:
                 tmpV = random.randint(1, 1000)  # 原来为row[8]，根据值转移思想，现改为随机生成一个1-1000的整数
                 while tmpV > tmpBalance:
                     tmpV = random.randint(1, tmpBalance)
-            costIndex, changeTxn2Sender, changeTxn2Recipient = pick_values_and_generate_txns(tmpV, tmpSender, tmpRecipient, tmpNonce, tmpSig, tmpTxnHash, tmpTime) # 花费的值和找零
+            costList, changeValueIndex, changeTxn2Sender, changeTxn2Recipient = pick_values_and_generate_txns(tmpV, tmpSender, tmpRecipient, tmpNonce, tmpSig, tmpTxnHash, tmpTime) # 花费的值和找零
             if changeTxn2Sender is None and changeTxn2Recipient is None: # 不需要找零
                 tmpValues = []
-                for i in range(costIndex):
+                for i in costList:
                     tmpValues.append(self.ValuePrfBlockPair[i][0])
+                    self.costedValues.append(self.ValuePrfBlockPair[i][0])
                     # 删除此值
                     # self.delete_VPBpair(i)
                 tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
@@ -111,16 +129,25 @@ class Account:
                                                  tx_hash=tmpTxnHash, time=tmpTime)
                 accTxns.append(tmpTxn)
             else: # 需要找零
-                if costIndex-1 > 0:
-                    tmpValues = []
-                    for i in range(costIndex-1):
+                tmpValues = []
+                for i in costList:
+                    if i is not changeValueIndex:
                         tmpValues.append(self.ValuePrfBlockPair[i][0])
-                        # 删除此值
-                        # self.delete_VPBpair(i)
+                        self.costedValues.append(self.ValuePrfBlockPair[i][0])
+                    # 删除此值
+                    # self.delete_VPBpair(i)
+                if tmpValues is not []:
                     tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                      nonce=tmpNonce, signature=tmpSig, value=tmpValues,
                                                      tx_hash=tmpTxnHash, time=tmpTime)
                     accTxns.append(tmpTxn)
+
+                tmpP = self.ValuePrfBlockPair[changeValueIndex][1]
+                tmpB = self.ValuePrfBlockPair[changeValueIndex][2]
+                self.delete_VPBpair(changeValueIndex)
+                self.add_VPBpair([changeTxn2Recipient.Value[0], tmpP, tmpB]) # V1在本轮的后续交易中都不可再使用
+                self.add_VPBpair([changeTxn2Sender.Value[0], tmpP, tmpB])
+
                 accTxns.append(changeTxn2Sender)
                 accTxns.append(changeTxn2Recipient)
 

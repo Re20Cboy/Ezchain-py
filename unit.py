@@ -5,16 +5,17 @@ import copy
 import Transaction
 import re
 
-class ProofUnit: # 一个值在一个账户手中流转时的所有证明
+class ProofUnit: # 一个值在一个区块内的证明
     def __init__(self, owner, ownerAccTxnsList, ownerMTreePrfList):
         self.owner = owner
-        self.ownerAccTxnsList = ownerAccTxnsList
-        self.ownerMTreePrfList = ownerMTreePrfList
+        self.ownerAccTxnsList = ownerAccTxnsList # 在此区块内的ownTxns
+        self.ownerMTreePrfList = ownerMTreePrfList # ownTxns对应的mTreePrf
 
 class Proof:
     def __init__(self, prfList):
         self.prfList = prfList
-
+    def add_prf_unit(self, prfUint):
+        self.prfList.append(prfUint)
 
 class Value: # 针对VCB区块链的专门设计的值结构，总量2^259 = 16^65
     def __init__(self, beginIndex, valueNum): # beginIndex是16进制str，valueNum是10进制int
