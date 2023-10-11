@@ -64,68 +64,11 @@ class EZsimulate:
             randomRecipients = []
             for tmp in randomRecipientsIndexList:
                 randomRecipients.append(self.accounts[tmp])
-            tmpAccTxn = self.accounts[i].random_generate_txns(randomRecipients) # todo:实现真正的Value转移
+            tmpAccTxn = self.accounts[i].random_generate_txns(randomRecipients)
             accountTxns.append(Transaction.AccountTxns(self.accounts[i].addr, tmpAccTxn))
             self.accounts[i].accTxnsIndex = i # 设置账户对于其提交交易在区块中位置的索引
             accountTxnsRecipientList.append(randomRecipientsIndexList)
         return accountTxns, accountTxnsRecipientList
-
-    def old_random_generate_AccTxns(self, numTxns = PICK_TXNS_NUM):
-
-        def distribute_transactions(X, Y): #将X个交易均匀分配给Y个账户
-            base_allocation = X // Y
-            remaining_transactions = X % Y
-            allocations = [base_allocation] * Y
-            for i in range(remaining_transactions):
-                allocations[i] += 1
-            return allocations
-
-        def readCSVTxns():
-            #从csv中读取交易
-            Txns = []
-            # 计算商和余数
-            quotient = numTxns // TNX_CSV_NUM
-            remainder = numTxns % TNX_CSV_NUM
-            for _ in range(quotient + 1):
-                # 读取CSV文件
-                with open(TNX_CSV_PATH, 'r') as file:
-                    reader = csv.reader(file)
-                    # 跳过标题行
-                    next(reader)
-                    # 遍历每一行
-                    for row in reader:
-                        # 获取特定列的数据并添加到相应的变量中
-                        # sender, recipient, nonce, signature, value, tx_hash, time
-                        tmpTime = row[1]
-                        tmpTxnHash = row[2]
-                        tmpSender = row[3]
-                        tmpRecipient = row[4]
-                        tmpNonce = 0  # 待补全
-                        tmpSig = unit.generate_signature(tmpSender)  # 待补全
-                        tmpValue = random.randint(1, 100) # 原来为row[8]，根据值转移思想，现改为随机生成一个1-1000的整数
-                        tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
-                                                         nonce=tmpNonce, signature=tmpSig, value=tmpValue,
-                                                         tx_hash=tmpTxnHash, time=tmpTime)
-                        #Txns.append(tmpTxn.Encode())
-                        Txns.append(tmpTxn)
-            del Txns[-(TNX_CSV_NUM - remainder):]
-            return Txns
-
-        randomAccNum = random.randrange(ACCOUNT_NUM // 2, ACCOUNT_NUM)  # 随机生成参与交易的账户数
-        accountTxns = []
-        allocations = distribute_transactions(numTxns, randomAccNum)
-        Txns = readCSVTxns()
-        for i in range(randomAccNum):#随机账户数量
-            allocTxnsNum = allocations[i] #读取本次要读取的交易数量
-            elements = Txns[:allocTxnsNum] #读取Txns中相应的元素
-            Txns = Txns[allocTxnsNum:] #截取Txns
-            for tmp in elements:
-                tmp.Sender = self.accounts[i].addr #设置交易的发送者
-                tmp.Recipient = random.choice(self.accounts).addr #随机设置交易的接收者
-                #todo: 变更交易的hash和sig
-            accountTxns.append(Transaction.AccountTxns(self.accounts[i].addr, elements))
-
-        return accountTxns
 
     def generate_GenesisBlock(self):
         v_genesis_begin = '0x77777777777777777777777777777777777777777777777777777777777777777' # 65位16进制
@@ -210,6 +153,7 @@ class EZsimulate:
             # 将区块中的证据广播给相应的用户
 
     def updateSenderVPBpair(self, mTree):
+
         count = 0 # 用于跟踪记录prfList的index
         for i, accTxns in enumerate(self.AccTxns, start=0):
             sender = accTxns.Sender # sender的account类型为self.accounts[i]
@@ -220,15 +164,24 @@ class EZsimulate:
             ownerMTreePrfList = mTree.prfList[count]
             count += 1
             costValueIndex = [] # 用于记录本轮中所有参与交易的值的VPB对的index
+
             for txn in senderTxns:
                 # 交易会引起所有Value的prf的变化
                 recipient = txn.Recipient
-                for v in txn.Value:
-                    index = self.accounts[i].find_VPBpair_via_V(txn.Value)
+                # 此交易中所有存在VPB中的值（注意，有些可能不存在VPB中）
+                txnVsinVPB = txn.Value
+                first_elements_list = [t[0] for t in self.accounts[i].ValuePrfBlockPair]
+                intersection = set(txnVsinVPB) & set(first_elements_list)
+                intersectionVlist = list(intersection)
+                if intersectionVlist != []: # 若==，则说明此值不在VPB中，是被分裂的值（不应存在的值）
+                    # 找出此txn中所有值的在sender中的index
+                    index = self.accounts[i].find_VPBpair_via_V(intersectionVlist)
                     costValueIndex += index
-                    prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
-                                             ownerMTreePrfList=ownerMTreePrfList)
-                    for item in index:
+                    # 为此txn中每个value添加新的prfUnit
+                    for v in txn.Value:
+                        prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
+                                                 ownerMTreePrfList=ownerMTreePrfList)
+                        item = index.pop(0) # 删除并返回第一个元素，即，v对应的index
                         self.accounts[i].ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
             for j, VPBpair in enumerate(self.accounts[i].ValuePrfBlockPair, start=0):
                 if j not in costValueIndex:
@@ -236,10 +189,21 @@ class EZsimulate:
                                              ownerMTreePrfList=ownerMTreePrfList)
                     self.accounts[i].ValuePrfBlockPair[j][1].add_prf_unit(prfUnit)
 
-    def sendPrf(self, recipientList):
-        for sender in recipientList: # 循环所有sender
-            for recipient in sender: # 循环所有recipient
-                self.accounts[recipient] # todo:调用recipient的接收函数
+    def sendPrf(self, ACTxnsRecipientList):
+        def sendPrfUnit(senderIndx, recipeIndex, VPBlist): # 将sender持有的在VPBlist中的VPB对转移给recipe
+            for i in VPBlist:
+                self.accounts[recipeIndex].add_VPBpair(self.accounts[senderIndx].ValuePrfBlockPair[i])
+            # 删除sender本地的VPB对
+            newSenerVPB = [x for j, x in enumerate(self.accounts[senderIndx].ValuePrfBlockPair) if j not in VPBlist]
+            self.accounts[senderIndx].ValuePrfBlockPair = newSenerVPB
+            # 更新balance
+            self.accounts[senderIndx].update_balance()
+
+        for i in range(len(self.AccTxns)):
+            for recipient in ACTxnsRecipientList[i]: # 账户i的所有recipient
+                costedVPBpairList = self.accounts[i].find_VPBpair_via_V(self.accounts[i].costedValues)
+                sendPrfUnit(i, recipient, costedVPBpairList)
+
 
 if __name__ == "__main__":
     #初始化设置
@@ -277,8 +241,13 @@ if __name__ == "__main__":
     EZsimulate.begin_mine(blockBodyMsg)
 
     # sender将交易添加至自己的本地数据库中
-    # todo:更新所有在持值的proof（V-P-B pair）
+    # 更新所有在持值的proof（V-P-B pair）
     EZsimulate.updateSenderVPBpair(blockBodyMsg.info)
 
-
     # sender将证明发送给recipient
+    EZsimulate.sendPrf(ACTxnsRecipientList)
+
+    # recipients验证prf的合法性
+    for recipients in ACTxnsRecipientList: #每个ACTxns中包含的recipients的集合
+        for recipe in recipients: #每个recipe
+            EZsimulate.accounts[recipe].receipt_txn_and_prf()
