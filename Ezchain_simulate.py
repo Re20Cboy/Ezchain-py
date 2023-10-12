@@ -1,3 +1,5 @@
+import copy
+
 import Block
 import Blockchain
 import Message
@@ -177,11 +179,10 @@ class EZsimulate:
                     # 找出此txn中所有值的在sender中的index
                     index = self.accounts[i].find_VPBpair_via_V(intersectionVlist)
                     costValueIndex += index
-                    # 为此txn中每个value添加新的prfUnit
-                    for v in txn.Value:
+                    # 为index中每个value添加新的prfUnit
+                    for item in index:
                         prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
                                                  ownerMTreePrfList=ownerMTreePrfList)
-                        item = index.pop(0) # 删除并返回第一个元素，即，v对应的index
                         self.accounts[i].ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
             for j, VPBpair in enumerate(self.accounts[i].ValuePrfBlockPair, start=0):
                 if j not in costValueIndex:
@@ -190,20 +191,28 @@ class EZsimulate:
                     self.accounts[i].ValuePrfBlockPair[j][1].add_prf_unit(prfUnit)
 
     def sendPrf(self, ACTxnsRecipientList):
-        def sendPrfUnit(senderIndx, recipeIndex, VPBlist): # 将sender持有的在VPBlist中的VPB对转移给recipe
-            for i in VPBlist:
-                self.accounts[recipeIndex].add_VPBpair(self.accounts[senderIndx].ValuePrfBlockPair[i])
-            # 删除sender本地的VPB对
-            newSenerVPB = [x for j, x in enumerate(self.accounts[senderIndx].ValuePrfBlockPair) if j not in VPBlist]
-            self.accounts[senderIndx].ValuePrfBlockPair = newSenerVPB
-            # 更新balance
-            self.accounts[senderIndx].update_balance()
+        def find_accID_via_accAddr(addr, recipientList):
+            for item in recipientList:
+                if self.accounts[item].addr == addr:
+                    return item
+            raise ValueError("未找到此地址对应的账户ID！")
 
-        for i in range(len(self.AccTxns)):
-            for recipient in ACTxnsRecipientList[i]: # 账户i的所有recipient
-                costedVPBpairList = self.accounts[i].find_VPBpair_via_V(self.accounts[i].costedValues)
-                sendPrfUnit(i, recipient, costedVPBpairList)
-
+        # 思路：根据account先持有的每个Value，查看其owner，若owner不再是自己则传输给新owner，并删除本地备份
+        for acc in self.accounts:
+            del_value_index = [] # 记录需要删除的value的index
+            for j, VPBpair in enumerate(acc.ValuePrfBlockPair,start=0):
+                latestOwner = VPBpair[1].prfList[-1].owner
+                if latestOwner != acc.addr: # owner不再是自己，则传输给新owner，并删除本地备份
+                    # 根据新owner的地址找到新owner的id
+                    accID = find_accID_via_accAddr(latestOwner, acc.recipientList)
+                    # 新owner添加此VPB
+                    self.accounts[accID].add_VPBpair(copy.deepcopy(VPBpair))
+                    # acc删除本地VPB备份，不能直接删除，否则循环中已加载的value会出问题
+                    del_value_index.append(j)
+            # 将需要删除的位置按照降序排序，以免删除元素之后影响后续元素的索引
+            del_value_index.sort(reverse=True)
+            for i in del_value_index:
+                acc.delete_VPBpair(i)
 
 if __name__ == "__main__":
     #初始化设置
@@ -228,6 +237,7 @@ if __name__ == "__main__":
     EZsimulate.AccTxns, ACTxnsRecipientList = EZsimulate.random_generate_AccTxns()
     for i in range(len(EZsimulate.AccTxns)):
         EZsimulate.accounts[i].accTxns = EZsimulate.AccTxns[i]
+        EZsimulate.accounts[i].recipientList = ACTxnsRecipientList[i]
 
     # Node打包收集所有交易形成区块body（可以理解为简单的打包交易）
     blockBodyMsg = EZsimulate.generate_block_body()

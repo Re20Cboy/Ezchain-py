@@ -6,6 +6,7 @@ from cryptography.hazmat.primitives import serialization
 import datetime
 import unit
 import Transaction
+import copy
 
 class Account:
     def __init__(self):
@@ -33,6 +34,11 @@ class Account:
         # 更新索引
         # for item in self.ValuePrfBlockPair:
             # item[0][1] = self.ValuePrfBlockPair.index(item)
+    def get_VPB_index_via_VPB(self, VPBpair):
+        for index, item in enumerate(self.ValuePrfBlockPair,start=0):
+            if item == VPBpair:
+                return index
+        raise ValueError("未在本账户中找到此VPB！")
 
     def update_balance(self):
         balance = 0
@@ -46,6 +52,7 @@ class Account:
             for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
                 if value == VPBpair[0]:
                     index.append(i)
+                    break
         if index != []:
             return index
         else:
@@ -154,8 +161,8 @@ class Account:
                 tmpP = self.ValuePrfBlockPair[changeValueIndex][1]
                 tmpB = self.ValuePrfBlockPair[changeValueIndex][2]
                 self.delete_VPBpair(changeValueIndex)
-                self.add_VPBpair([changeTxn2Recipient.Value[0], tmpP, tmpB]) # V1在本轮的后续交易中都不可再使用
-                self.add_VPBpair([changeTxn2Sender.Value[0], tmpP, tmpB])
+                self.add_VPBpair([changeTxn2Recipient.Value[0], copy.deepcopy(tmpP), copy.deepcopy(tmpB)]) # V1在本轮的后续交易中都不可再使用
+                self.add_VPBpair([changeTxn2Sender.Value[0], copy.deepcopy(tmpP), copy.deepcopy(tmpB)])
 
                 accTxns.append(changeTxn2Sender)
                 accTxns.append(changeTxn2Recipient)
@@ -165,6 +172,7 @@ class Account:
 
     def receipt_txn_and_prf(self):
         # todo:接收函数的后续处理
+        
         pass
     def generate_txn_prf_when_use(self, begin_index, end_index): # begin_index, end_index分别表示此txn在本账户手中开始的区块号和结束的区块号
         # todo: 根据交易、区块等input，生成目标交易的proof。
@@ -172,5 +180,4 @@ class Account:
         # proof单元的数据结构：（区块号，mTree证明）
         # 生成new proof（在此account时期内的证明）
         new_proof = []
-
         pass
