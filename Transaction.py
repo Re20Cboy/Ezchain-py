@@ -81,3 +81,9 @@ class Transaction:
         #tx.SenderIsBroker = False
         return tx
 
+    def check_value_is_in_txn(self, value):
+        # 检测某个值是否在此交易内
+        for V in self.Value:
+            if V.isInValue(value):
+                return True
+        return False

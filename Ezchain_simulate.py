@@ -12,8 +12,6 @@ import numpy as np
 import Account
 import Transaction
 import unit
-import csv
-from pympler import asizeof
 
 class EZsimulate:
     def __init__(self):
@@ -87,23 +85,21 @@ class EZsimulate:
             genesisAccTxns.append(Txn)
         # 生成创世块
         GAccTxns = Transaction.AccountTxns(GENESIS_SENDER, genesisAccTxns)
-        encodedGAccTxns = []
-        for item in GAccTxns.AccTxns:
-            encodedGAccTxns.append(item.Encode())
+        encodedGAccTxns = [GAccTxns.Encode()]
         preBlockHash = '0x7777777'
         blockIndex = 0
-        genesisMTree = unit.MerkleTree(encodedGAccTxns)
+        genesisMTree = unit.MerkleTree(encodedGAccTxns, isGenesisBlcok=True)
         mTreeRoot = genesisMTree.getRootHash()
         genesisBlock = Block.Block(index=blockIndex, mTreeRoot = mTreeRoot, miner = GENESIS_MINER_ID, prehash = preBlockHash)
-        genesisBlockMsg = Message.BlockMsg(genesisBlock)
-        genesisBlockBodyMsg = Message.BlockBodyMsg(genesisMTree, genesisAccTxns)
+        # genesisBlockMsg = Message.BlockMsg(genesisBlock)
+        # genesisBlockBodyMsg = Message.BlockBodyMsg(genesisMTree, genesisAccTxns)
         # 将创世块加入区块链中
         self.blockchain = Blockchain.Blockchain(genesisBlock)
         # 生成每个创世块中的proof
         for count, acc in enumerate(self.accounts, start=0):
-            tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=GAccTxns ,ownerMTreePrfList=genesisMTree.prfList[count])
+            tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=GAccTxns.AccTxns ,ownerMTreePrfList=[genesisMTree.root.value])
             tmpPrf = unit.Proof([tmpPrfUnit])
-            tmpVPBPair = [genesisAccTxns[count].Value, tmpPrf, genesisBlock.index] # V-P-B对
+            tmpVPBPair = [genesisAccTxns[count].Value, tmpPrf, [genesisBlock.index]] # V-P-B对
             acc.add_VPBpair(tmpVPBPair)
 
     def generate_block(self):
@@ -157,6 +153,9 @@ class EZsimulate:
     def updateSenderVPBpair(self, mTree):
 
         count = 0 # 用于跟踪记录prfList的index
+        # todo: 这里简化了获取VPB中B的流程，真实情况应是：等待区块上链，查看是否包含自身的交易，再确定区块号
+        blockIndex = self.blockchain.get_latest_block().index  # 获取最新快的index
+
         for i, accTxns in enumerate(self.AccTxns, start=0):
             sender = accTxns.Sender # sender的account类型为self.accounts[i]
             senderTxns = accTxns.AccTxns
@@ -183,12 +182,25 @@ class EZsimulate:
                     for item in index:
                         prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
                                                  ownerMTreePrfList=ownerMTreePrfList)
+
                         self.accounts[i].ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
+                        self.accounts[i].ValuePrfBlockPair[item][2].append(copy.deepcopy(blockIndex))
             for j, VPBpair in enumerate(self.accounts[i].ValuePrfBlockPair, start=0):
                 if j not in costValueIndex:
                     prfUnit = unit.ProofUnit(owner=owner, ownerAccTxnsList=ownerAccTxnsList,
                                              ownerMTreePrfList=ownerMTreePrfList)
                     self.accounts[i].ValuePrfBlockPair[j][1].add_prf_unit(prfUnit)
+                    self.accounts[i].ValuePrfBlockPair[j][2].append(copy.deepcopy(blockIndex))
+
+    def updateBloomPrf(self):
+        txnAccNum = len(self.AccTxns) # 参与本轮交易的账户的数量
+        txnAccList = [item.addr for item in self.accounts]
+        txnAccList = txnAccList[:txnAccNum] # 参与本轮交易的账户的地址列表
+        unTxnAccNum = len(self.accounts) - txnAccNum # 未参与交易的账户的数量
+        for i in range(unTxnAccNum):
+            index = -(i+1) # 获得未参与交易的账户的索引
+            latestBlock = self.blockchain.get_latest_block()
+            self.accounts[index].updateBloomPrf(latestBlock.get_bloom(), txnAccList, latestBlock.get_index())
 
     def sendPrf(self, ACTxnsRecipientList):
         def find_accID_via_accAddr(addr, recipientList):
@@ -206,7 +218,10 @@ class EZsimulate:
                     # 根据新owner的地址找到新owner的id
                     accID = find_accID_via_accAddr(latestOwner, acc.recipientList)
                     # 新owner添加此VPB
-                    self.accounts[accID].add_VPBpair(copy.deepcopy(VPBpair))
+                    newVPBpair = copy.deepcopy(VPBpair)
+                    # todo: 新owner需要检测此VPB的合法性
+                    if self.accounts[accID].check_VPBpair(newVPBpair, acc.bloomPrf, self.blockchain):
+                        self.accounts[accID].add_VPBpair(newVPBpair)
                     # acc删除本地VPB备份，不能直接删除，否则循环中已加载的value会出问题
                     del_value_index.append(j)
             # 将需要删除的位置按照降序排序，以免删除元素之后影响后续元素的索引
@@ -254,6 +269,9 @@ if __name__ == "__main__":
     # 更新所有在持值的proof（V-P-B pair）
     EZsimulate.updateSenderVPBpair(blockBodyMsg.info)
 
+    # 更新account的bloomPrf信息
+    EZsimulate.updateBloomPrf()
+
     # sender将证明发送给recipient
     EZsimulate.sendPrf(ACTxnsRecipientList)
 
@@ -261,3 +279,5 @@ if __name__ == "__main__":
     for recipients in ACTxnsRecipientList: #每个ACTxns中包含的recipients的集合
         for recipe in recipients: #每个recipe
             EZsimulate.accounts[recipe].receipt_txn_and_prf()
+
+    # todo:重置account中的accTxns、accTxnsIndex、costedValues、recipientList等信息

@@ -108,12 +108,15 @@ class MerkleTreeNode:
 
 
 class MerkleTree:
-    def __init__(self, values):
+    def __init__(self, values, isGenesisBlcok=False):
         self.prfList = None
-        self.buildTree(values)
+        self.buildTree(values, isGenesisBlcok)
 
-    def buildTree(self, leaves):
+    def buildTree(self, leaves, isGenesisBlcok):
         leaves = [MerkleTreeNode(None, None, MerkleTreeNode.hash(e), e) for e in leaves]
+        if isGenesisBlcok:
+            self.root = leaves[0] # 创世块的仅记录树根信息
+            return
         OrgLeavesLen = len(leaves) # 原始AccTxns的长度
         popLeaveNum = 0 #记录生成mTree时pop了多少叶子节点
         PrfList = [] #记录mTree的生成路径用于追踪以生成prf

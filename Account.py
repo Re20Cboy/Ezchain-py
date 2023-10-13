@@ -7,6 +7,7 @@ import datetime
 import unit
 import Transaction
 import copy
+from const import *
 
 class Account:
     def __init__(self):
@@ -171,9 +172,69 @@ class Account:
         return accTxns
 
     def receipt_txn_and_prf(self):
-        # todo:接收函数的后续处理
-        
         pass
+
+    def updateBloomPrf(self, bloom, txnAccList, blockIndex):
+        if self.costedValues == [] and self.addr in bloom:
+            # 被bloom误判，执行添加布隆证明操作
+            self.bloomPrf.append([copy.deepcopy(txnAccList), copy.deepcopy(blockIndex)]) # 布隆证明 = [此布隆过滤器中所有账户的地址，此布隆隶属的区块号]
+
+    def check_VPBpair(self, VPBpair, bloomPrf, blockchain):
+        # todo:
+        # 检测接收到的VPB对的合法性
+
+        # 1 检测数据类型：
+        if type(VPBpair[0]) != unit.Value or type(VPBpair[1]) != unit.Proof or type(VPBpair[2]) != list:
+            return False # 数据结构错误
+
+        value = VPBpair[0]
+        valuePrf = VPBpair[1].prfList
+        blockIndex = VPBpair[2]
+
+        # 2 检测value的结构合法性：
+        if not value.checkValue:
+            return False # value的结构合法性检测不通过
+
+        recordOwner = None # 此变量用于记录值流转的持有者
+
+        # 3 检验proof的正确性
+        for prfUnit in valuePrf:
+            isNewEpoch = False
+            if recordOwner != prfUnit.owner: # 说明 owner 已改变，该值进入下一个owner持有的epoch
+                isNewEpoch = True
+            recordOwner = prfUnit.owner # 更新持有者信息
+
+            ownerAccTxnsList = prfUnit.ownerAccTxnsList
+            ownerMTreePrfList = prfUnit.ownerMTreePrfList
+
+            # todo:检查VPB对之间关系的正确性
+            #   每个epoch内的B和主链上的布隆过滤器的信息是相符的，即，epoch的owner没有在B上撒谎
+            #   ownerAccTxnsList和ownerMTreePrfList的信息是相符的，即，hash(ownerAccTxnsList) == ownerMTreePrfList的叶子节点value
+            #   ownerMTreePrfList和主链此块中的root是相符的，即，证明此ownerAccTxns是真实存在在区块中的。
+
+            # 创世块的特殊检验处理
+            if ownerMTreePrfList == [blockchain.chain[0].get_mTreeRoot()]: # 说明这是创世块
+                tmpGenesisAccTxns = Transaction.AccountTxns(GENESIS_SENDER, ownerAccTxnsList)
+                tmpEncode = tmpGenesisAccTxns.Encode()
+                if tmpEncode != blockchain.chain[0].get_mTreeRoot():
+                    return False # 树根值错误，说明节点伪造了创世块中的交易。
+
+            if isNewEpoch:
+                # 所有txn中应当有且仅有一个交易将值转移到新的owner手中
+                SpendValueTxnList = [] # 记录在此accTxns中此值被转移的所有交易，合法的情况下，此list的长度应为1
+                for txn in ownerAccTxnsList:
+                    if txn.check_value_is_in_txn(value):
+                        SpendValueTxnList.append(txn)
+                if len(SpendValueTxnList) != 1:
+                    return False # 存在双花！或者未转移值给owner！
+                if SpendValueTxnList[0].Recipient != recordOwner:
+                    return False # 此值未转移给指定的owner
+            else:
+                # 此值尚未转移给新的owner
+                for txn in ownerAccTxnsList:
+                    if txn.check_value_is_in_txn(value):
+                        return False # 此值不应当在此处被花费！
+
     def generate_txn_prf_when_use(self, begin_index, end_index): # begin_index, end_index分别表示此txn在本账户手中开始的区块号和结束的区块号
         # todo: 根据交易、区块等input，生成目标交易的proof。
         # proof = 原证明 + 新生成的证明（在此account时期内的证明）
