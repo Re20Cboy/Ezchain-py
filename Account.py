@@ -8,6 +8,7 @@ import unit
 import Transaction
 import copy
 from const import *
+import hashlib
 
 class Account:
     def __init__(self):
@@ -180,8 +181,12 @@ class Account:
             self.bloomPrf.append([copy.deepcopy(txnAccList), copy.deepcopy(blockIndex)]) # 布隆证明 = [此布隆过滤器中所有账户的地址，此布隆隶属的区块号]
 
     def check_VPBpair(self, VPBpair, bloomPrf, blockchain):
-        # todo:
-        # 检测接收到的VPB对的合法性
+        def hash(val):
+            # return hashlib.sha256(val.encode("utf-8")).hexdigest()
+            if type(val) == str:
+                return hashlib.sha256(val.encode("utf-8")).hexdigest()
+            else:
+                return hashlib.sha256(val).hexdigest()
 
         # 1 检测数据类型：
         if type(VPBpair[0]) != unit.Value or type(VPBpair[1]) != unit.Proof or type(VPBpair[2]) != list:
@@ -191,33 +196,57 @@ class Account:
         valuePrf = VPBpair[1].prfList
         blockIndex = VPBpair[2]
 
+        if len(valuePrf) != len(blockIndex):
+            return False # 证据和块索引非一一映射，固错误
+
         # 2 检测value的结构合法性：
         if not value.checkValue:
             return False # value的结构合法性检测不通过
 
         recordOwner = None # 此变量用于记录值流转的持有者
 
+        epochRealBList = [] # 记录epoch内的真实的B的信息，用于和VPB中的B进行对比
+        BList = [] # 记录epoch内的VPB的B的信息，结构为：[(owner,[list of block index]), (...), (...), ...]用于进行对比验证
+        oneEpochBList = None # 结构为：[list of block index]
+
         # 3 检验proof的正确性
-        for prfUnit in valuePrf:
+        for index, prfUnit in enumerate(valuePrf, start=0):
             isNewEpoch = False
             if recordOwner != prfUnit.owner: # 说明 owner 已改变，该值进入下一个owner持有的epoch
                 isNewEpoch = True
-            recordOwner = prfUnit.owner # 更新持有者信息
+                recordOwner = prfUnit.owner # 更新持有者信息
+                # 更新epoch内的VPB的B的信息
+                if oneEpochBList != None:
+                    BList.append((recordOwner, oneEpochBList))
+                oneEpochBList = []
 
             ownerAccTxnsList = prfUnit.ownerAccTxnsList
             ownerMTreePrfList = prfUnit.ownerMTreePrfList
+
+            # 创世块的特殊检验处理
+            if ownerMTreePrfList == [blockchain.chain[0].get_mTreeRoot()]: # 说明这是创世块
+                tmpGenesisAccTxns = Transaction.AccountTxns(GENESIS_SENDER, ownerAccTxnsList)
+                tmpEncode = tmpGenesisAccTxns.Encode()
+                if hash(tmpEncode) != blockchain.chain[0].get_mTreeRoot():
+                    return False # 树根值错误，说明节点伪造了创世块中的交易。
+                continue # 因为是创世块，跳过后面的检测内容。
 
             # todo:检查VPB对之间关系的正确性
             #   每个epoch内的B和主链上的布隆过滤器的信息是相符的，即，epoch的owner没有在B上撒谎
             #   ownerAccTxnsList和ownerMTreePrfList的信息是相符的，即，hash(ownerAccTxnsList) == ownerMTreePrfList的叶子节点value
             #   ownerMTreePrfList和主链此块中的root是相符的，即，证明此ownerAccTxns是真实存在在区块中的。
 
-            # 创世块的特殊检验处理
-            if ownerMTreePrfList == [blockchain.chain[0].get_mTreeRoot()]: # 说明这是创世块
-                tmpGenesisAccTxns = Transaction.AccountTxns(GENESIS_SENDER, ownerAccTxnsList)
-                tmpEncode = tmpGenesisAccTxns.Encode()
-                if tmpEncode != blockchain.chain[0].get_mTreeRoot():
-                    return False # 树根值错误，说明节点伪造了创世块中的交易。
+            # 检测：ownerAccTxnsList和ownerMTreePrfList的信息是相符的
+            # 注意，这里的Encode()函数只对accTxns进行编码，因此可以设sender='sender'，结果不影响。
+            uncheckedAccTxns = Transaction.AccountTxns(sender='sender', accTxns=ownerAccTxnsList)
+            uncheckedMTreePrf = unit.MTreeProof(MTPrfList=ownerMTreePrfList)
+
+            # 检测：ownerMTreePrfList和主链此块中的root是相符的
+            if not uncheckedMTreePrf.checkPrf(accTxns=uncheckedAccTxns, trueRoot=blockchain.chain[blockIndex[index]].get_mTreeRoot()):
+                return False # 默克尔树检测未通过，固错误！
+
+            # 记录epoch内的VPB的B的信息
+            oneEpochBList.append((blockIndex[index]))
 
             if isNewEpoch:
                 # 所有txn中应当有且仅有一个交易将值转移到新的owner手中
@@ -234,6 +263,31 @@ class Account:
                 for txn in ownerAccTxnsList:
                     if txn.check_value_is_in_txn(value):
                         return False # 此值不应当在此处被花费！
+
+        # 检测：每个epoch内的B和主链上的布隆过滤器的信息是相符的，即，epoch的owner没有在B上撒谎
+        for epochRecord in BList:
+            (owner, uncheckedBList) = epochRecord
+            if len(uncheckedBList) < 1:
+                return False # 本段owner持有值没有记录，固错误！
+            ownerBegin = uncheckedBList[0] # owner刚拥有该值时的block index
+            ownerEnd = uncheckedBList[-1] # owner将在下一个区块将此值转移给其他owner，即，最后一个持有此值的block index
+            if ownerEnd < ownerBegin:
+                return False # owner持有值的区块号记录有误！
+            # 在blockchain中根据ownerBegin和ownerEnd进行搜索符合bloom过滤器的的区块index
+            for i in range(ownerBegin, ownerEnd+1):
+                if owner in blockchain.chain[i].bloom:
+                    epochRealBList.append(i)
+            # 对比epochRealBList和uncheckedBList
+            if epochRealBList != uncheckedBList:
+                # 若不同则需要检测bloom proof，排除被bloom过滤器“误伤”的可能
+                if bloomPrf == []:
+                    return False # 没有提供bloom proof，因此没有误伤，则说明owner提供的值持有记录和真实记录不同，错误！
+                else:
+                    # todo: 检测bloom proof
+                    pass
+
+        return True
+
 
     def generate_txn_prf_when_use(self, begin_index, end_index): # begin_index, end_index分别表示此txn在本账户手中开始的区块号和结束的区块号
         # todo: 根据交易、区块等input，生成目标交易的proof。

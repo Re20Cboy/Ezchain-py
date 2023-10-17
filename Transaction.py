@@ -2,14 +2,16 @@ import hashlib
 import pickle
 import csv
 from const import *
+import datetime
 
 class AccountTxns:
     def __init__(self, sender, accTxns):
         self.Sender = sender
         self.AccTxnsHash = None
         self.AccTxns = accTxns
+        self.time = str(datetime.datetime.now()) # 记录时间戳
 
-    def Encode(self):
+    def Encode(self): # 这里encode的只有真正的txn的list
         encoded_tx = pickle.dumps(self.AccTxns)
         return encoded_tx
     @staticmethod
@@ -28,7 +30,7 @@ class Transaction:
         self.Sender = sender
         self.Recipient = recipient
         self.Nonce = nonce
-        self.Signature = signature  # todo:not implemented now.
+        self.Signature = signature  # todo: not implemented now.
         self.Value = value
         self.TxHash = tx_hash
         self.Time = time

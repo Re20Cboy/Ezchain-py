@@ -89,12 +89,14 @@ class MTreeProof:
 
 
 class MerkleTreeNode:
-    def __init__(self, left, right, value, content = None, path = []):
+    def __init__(self, left, right, value, content = None, path = [], leafIndex = None):
         self.left = left
         self.right = right
         self.value = value
         self.content = content
         self.path = path
+        self.leafIndex = leafIndex # 叶子节点的编号，用于跟踪叶子节点，便于制造prfList
+        self.father = None # 用于记录节点的父亲节点
 
     def hash(val):
         #return hashlib.sha256(val.encode("utf-8")).hexdigest()
@@ -109,22 +111,25 @@ class MerkleTreeNode:
 
 class MerkleTree:
     def __init__(self, values, isGenesisBlcok=False):
-        self.prfList = None
+        self.prfList = None # 这里的prf是针对每轮每个参与交易的account产生一个proof list
         self.buildTree(values, isGenesisBlcok)
+        self.leaves = None
 
     def buildTree(self, leaves, isGenesisBlcok):
-        leaves = [MerkleTreeNode(None, None, MerkleTreeNode.hash(e), e) for e in leaves]
+        leaves = [MerkleTreeNode(None, None, MerkleTreeNode.hash(e), e, leafIndex=index) for index, e in enumerate(leaves, start=0)]
+        self.leaves = leaves # 记录叶子节点的备份
         if isGenesisBlcok:
             self.root = leaves[0] # 创世块的仅记录树根信息
             return
         OrgLeavesLen = len(leaves) # 原始AccTxns的长度
         popLeaveNum = 0 #记录生成mTree时pop了多少叶子节点
         PrfList = [] #记录mTree的生成路径用于追踪以生成prf
+
         while len(leaves) > 1:
             length = len(leaves)
             for i in range(length // 2):
                 if leaves[0].content is not None: #是叶子节点
-                    leaves[0].path = [popLeaveNum] # 用.append添加会造成所有节点的path都同步变化！！！！！！！！！# 可能是python的指针机制导致的
+                    leaves[0].path = [popLeaveNum] # 用.append添加会造成所有节点的path都同步变化！！# 可能是python的指针机制导致的
                     popLeaveNum += 1
                 left = leaves.pop(0)
                 if leaves[0].content is not None: #是叶子节点
@@ -135,24 +140,47 @@ class MerkleTree:
                 comPath = left.path+right.path
                 left.path = comPath
                 right.path = comPath
-                leaves.append(MerkleTreeNode(left, right, value, path=comPath))
+                newMTreeNode = MerkleTreeNode(left, right, value, path=comPath)
+                left.father = newMTreeNode # 添加父节点信息
+                right.father = newMTreeNode # 添加父节点信息
+                leaves.append(newMTreeNode)
             if length % 2 == 1:
                 leaves.append(leaves.pop(0))
 
         self.root = leaves[0]
+
         # 对每个accTxns生成对应的的proof trace
-        tmpList = [self.root.value]
+        tmpList = []
         for i in range(OrgLeavesLen): # 添加root节点到所有prflist中
             PrfList.append(copy.deepcopy(tmpList))
-        def add_path_2_prfList(node):
-            for item in node.path:
-                PrfList[item].append(node.value)
-            if node.left is not None and node.right is not None:
-                add_path_2_prfList(node.left)
-                add_path_2_prfList(node.right)
 
-        add_path_2_prfList(self.root.left)
-        add_path_2_prfList(self.root.right)
+        for leaf in self.leaves:
+            PrfList[leaf.leafIndex].append(leaf.value)
+            father = leaf.father
+            fatherRightChild = father.right
+            fatherLeftChild = father.left
+            anotherChild = None
+            if fatherRightChild == leaf:
+                anotherChild = fatherLeftChild
+            if fatherLeftChild == leaf:
+                anotherChild = fatherRightChild
+            PrfList[leaf.leafIndex].append(anotherChild.value)
+            PrfList[leaf.leafIndex].append(father.value)
+            
+        """
+        def add_given_path_2_prfList(node, givenIndex):
+            if node.left is not None and node.right is not None:
+                add_given_path_2_prfList(node.left, givenIndex)
+                add_given_path_2_prfList(node.right, givenIndex)
+            if givenIndex in node.path:
+                PrfList[givenIndex].append(node.value)
+
+        for leafIndex in range(OrgLeavesLen):
+            add_given_path_2_prfList(self.root.left, leafIndex)
+            add_given_path_2_prfList(self.root.right, leafIndex)
+            PrfList[leafIndex].append(copy.deepcopy(self.root.value))
+        """
+
         self.prfList = PrfList
 
     #测试mTree的叶子节点数
@@ -216,7 +244,7 @@ def generate_random_hex(length):
     return hex_number
 
 if __name__ == "__main__":
-    elems = ['1', '2', '3', '4']
+    elems = ['1', '2', '3', '4', '5', '6']
     print('构造树')
     mtree = MerkleTree(elems)
     print('打印根哈希值')
