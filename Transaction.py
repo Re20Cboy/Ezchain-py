@@ -84,8 +84,8 @@ class Transaction:
         return tx
 
     def check_value_is_in_txn(self, value):
-        # 检测某个值是否在此交易内
+        # 检测某个值是否和此交易内的某个值有交集
         for V in self.Value:
-            if V.isInValue(value):
+            if V.isIntersectValue(value):
                 return True
         return False

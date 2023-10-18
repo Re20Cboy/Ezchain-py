@@ -8,4 +8,5 @@ HASH_DIFFICULTY = 0.00001 #挖矿难度，即，一次hash运算挖矿成功的�
 HASH_POWER = 100 #哈希算力，表示每秒钟执行的hash次数
 ACCOUNT_NUM = 100 #模拟账户数量
 GENESIS_SENDER = '0x259'
+SIMULATE_ROUND = 10
 GENESIS_MINER_ID = -1

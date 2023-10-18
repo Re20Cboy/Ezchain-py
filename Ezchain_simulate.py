@@ -202,7 +202,7 @@ class EZsimulate:
             latestBlock = self.blockchain.get_latest_block()
             self.accounts[index].updateBloomPrf(latestBlock.get_bloom(), txnAccList, latestBlock.get_index())
 
-    def sendPrf(self, ACTxnsRecipientList):
+    def sendPrfAndCheck(self, ACTxnsRecipientList):
         def find_accID_via_accAddr(addr, recipientList):
             for item in recipientList:
                 if self.accounts[item].addr == addr:
@@ -212,6 +212,8 @@ class EZsimulate:
         # 思路：根据account先持有的每个Value，查看其owner，若owner不再是自己则传输给新owner，并删除本地备份
         for acc in self.accounts:
             del_value_index = [] # 记录需要删除的value的index
+            if type(acc.ValuePrfBlockPair) != list or acc.ValuePrfBlockPair == []:
+                raise ValueError("VPB类型或内容错误！")
             for j, VPBpair in enumerate(acc.ValuePrfBlockPair,start=0):
                 latestOwner = VPBpair[1].prfList[-1].owner
                 if latestOwner != acc.addr: # owner不再是自己，则传输给新owner，并删除本地备份
@@ -219,7 +221,7 @@ class EZsimulate:
                     accID = find_accID_via_accAddr(latestOwner, acc.recipientList)
                     # 新owner添加此VPB
                     newVPBpair = copy.deepcopy(VPBpair)
-                    # todo: 新owner需要检测此VPB的合法性
+                    # 新owner需要检测此VPB的合法性
                     if self.accounts[accID].check_VPBpair(newVPBpair, acc.bloomPrf, self.blockchain):
                         self.accounts[accID].add_VPBpair(newVPBpair)
                     # acc删除本地VPB备份，不能直接删除，否则循环中已加载的value会出问题
@@ -228,6 +230,11 @@ class EZsimulate:
             del_value_index.sort(reverse=True)
             for i in del_value_index:
                 acc.delete_VPBpair(i)
+
+    def clearOldInfo(self): # 进入下一轮挖矿时，清空一些不必要信息
+        for acc in self.accounts:
+            acc.clear_info()
+
 
 if __name__ == "__main__":
     #初始化设置
@@ -262,22 +269,15 @@ if __name__ == "__main__":
     print('network:')
     print(EZsimulate.network.delay_matrix)
 
-    # 挖矿模拟
-    EZsimulate.begin_mine(blockBodyMsg)
-
-    # sender将交易添加至自己的本地数据库中
-    # 更新所有在持值的proof（V-P-B pair）
-    EZsimulate.updateSenderVPBpair(blockBodyMsg.info)
-
-    # 更新account的bloomPrf信息
-    EZsimulate.updateBloomPrf()
-
-    # sender将证明发送给recipient
-    EZsimulate.sendPrf(ACTxnsRecipientList)
-
-    # recipients验证prf的合法性
-    for recipients in ACTxnsRecipientList: #每个ACTxns中包含的recipients的集合
-        for recipe in recipients: #每个recipe
-            EZsimulate.accounts[recipe].receipt_txn_and_prf()
-
-    # todo:重置account中的accTxns、accTxnsIndex、costedValues、recipientList等信息
+    for round in range(SIMULATE_ROUND):
+        # 挖矿模拟
+        EZsimulate.begin_mine(blockBodyMsg)
+        # sender将交易添加至自己的本地数据库中，并更新所有在持值的proof（V-P-B pair）
+        EZsimulate.updateSenderVPBpair(blockBodyMsg.info)
+        # 更新account的bloomPrf信息
+        EZsimulate.updateBloomPrf()
+        # sender将证明发送给recipient，且recipient对VPB进行验证
+        EZsimulate.sendPrfAndCheck(ACTxnsRecipientList)
+        # 重置account中的信息
+        EZsimulate.clearOldInfo()
+        

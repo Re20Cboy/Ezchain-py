@@ -41,7 +41,7 @@ class Value: # 针对VCB区块链的专门设计的值结构，总量2^259 = 16^
     def checkValue(self): # 检测Value的合法性
         def is_hexadecimal(string):
             pattern = r"^0x[0-9A-Fa-f]+$"
-            return re.match(pattern, string) is not None
+            return re.match(pattern, string) != None
         if self.valueNum <= 0:
             return False
         if not is_hexadecimal(self.beginIndex):
@@ -52,12 +52,18 @@ class Value: # 针对VCB区块链的专门设计的值结构，总量2^259 = 16^
             return False
         return True
 
-    def isInValue(self, target): # target是Value类型, 判断target是否和本value有交集
+    def isIntersectValue(self, target): # target是Value类型, 判断target是否和本value有交集
         decimal_targetBegin = int(target.beginIndex, 16)
         decimal_targetEnd = int(target.endIndex, 16)
         decimal_beginIndex = self.get_decimal_beginIndex()
         decimal_endIndex = self.get_decimal_endIndex()
         return decimal_endIndex >= decimal_targetBegin and decimal_targetEnd >= decimal_beginIndex
+    def isInValue(self, target):# target是Value类型, 判断target是否在本value内
+        decimal_targetBegin = int(target.beginIndex, 16)
+        decimal_targetEnd = int(target.endIndex, 16)
+        decimal_beginIndex = self.get_decimal_beginIndex()
+        decimal_endIndex = self.get_decimal_endIndex()
+        return decimal_targetBegin >= decimal_beginIndex and decimal_targetEnd <= decimal_endIndex
 
 class MTreeProof:
     def __init__(self, MTPrfList = []):
@@ -74,16 +80,16 @@ class MTreeProof:
         encodeAccTxns = accTxns.Encode()
         hashedEncodeAccTxns = hash(encodeAccTxns)
 
-        if hashedEncodeAccTxns is not self.MTPrfList[0] and hashedEncodeAccTxns is not self.MTPrfList[1]:
+        if hashedEncodeAccTxns != self.MTPrfList[0] and hashedEncodeAccTxns != self.MTPrfList[1]:
             return False
-        if self.MTPrfList[-1] is not trueRoot:
+        if self.MTPrfList[-1] != trueRoot:
             return False
         lastHash = None
         for i in range(len(self.MTPrfList) // 2):
             lastHash = self.MTPrfList[2*i+2]
-            if hash(self.MTPrfList[2*i]+self.MTPrfList[2*i+1]) is not lastHash:
+            if hash(self.MTPrfList[2*i]+self.MTPrfList[2*i+1]) != lastHash and hash(self.MTPrfList[2*i+1]+self.MTPrfList[2*i]) != lastHash:
                 return False
-        if lastHash is not self.MTPrfList[-1]:
+        if lastHash != self.MTPrfList[-1]:
             return False
         return True
 
@@ -111,13 +117,15 @@ class MerkleTreeNode:
 
 class MerkleTree:
     def __init__(self, values, isGenesisBlcok=False):
+        self.leaves = []
         self.prfList = None # 这里的prf是针对每轮每个参与交易的account产生一个proof list
         self.buildTree(values, isGenesisBlcok)
-        self.leaves = None
 
     def buildTree(self, leaves, isGenesisBlcok):
         leaves = [MerkleTreeNode(None, None, MerkleTreeNode.hash(e), e, leafIndex=index) for index, e in enumerate(leaves, start=0)]
-        self.leaves = leaves # 记录叶子节点的备份
+        for item in leaves:
+            self.leaves.append(item) # 记录叶子节点的备份
+
         if isGenesisBlcok:
             self.root = leaves[0] # 创世块的仅记录树根信息
             return
@@ -128,11 +136,11 @@ class MerkleTree:
         while len(leaves) > 1:
             length = len(leaves)
             for i in range(length // 2):
-                if leaves[0].content is not None: #是叶子节点
+                if leaves[0].content != None: #是叶子节点
                     leaves[0].path = [popLeaveNum] # 用.append添加会造成所有节点的path都同步变化！！# 可能是python的指针机制导致的
                     popLeaveNum += 1
                 left = leaves.pop(0)
-                if leaves[0].content is not None: #是叶子节点
+                if leaves[0].content != None: #是叶子节点
                     leaves[0].path = [popLeaveNum]
                     popLeaveNum += 1
                 right = leaves.pop(0)
@@ -154,19 +162,26 @@ class MerkleTree:
         for i in range(OrgLeavesLen): # 添加root节点到所有prflist中
             PrfList.append(copy.deepcopy(tmpList))
 
-        for leaf in self.leaves:
-            PrfList[leaf.leafIndex].append(leaf.value)
-            father = leaf.father
+        def addUnitPrfList(tmpPrfList, nowNode, roundIndex):
+            father = nowNode.father
             fatherRightChild = father.right
             fatherLeftChild = father.left
             anotherChild = None
-            if fatherRightChild == leaf:
+            if fatherRightChild == nowNode:
                 anotherChild = fatherLeftChild
-            if fatherLeftChild == leaf:
+            if fatherLeftChild == nowNode:
                 anotherChild = fatherRightChild
-            PrfList[leaf.leafIndex].append(anotherChild.value)
-            PrfList[leaf.leafIndex].append(father.value)
-            
+            tmpPrfList[roundIndex].append(anotherChild.value)
+            tmpPrfList[roundIndex].append(father.value)
+
+        for leaf in self.leaves:
+            # 添加叶子节点
+            PrfList[leaf.leafIndex].append(leaf.value)
+            nowNode = leaf
+            while nowNode != self.root:
+                addUnitPrfList(tmpPrfList=PrfList, nowNode=nowNode, roundIndex=leaf.leafIndex)
+                nowNode = nowNode.father
+
         """
         def add_given_path_2_prfList(node, givenIndex):
             if node.left is not None and node.right is not None:
