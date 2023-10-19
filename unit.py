@@ -28,6 +28,7 @@ class Value: # 针对VCB区块链的专门设计的值结构，总量2^259 = 16^
     def get_decimal_endIndex(self):
         return int(self.endIndex, 16)
 
+    # todo: 找零计算逻辑有错误，少+1
     def split_value(self, change): # 对此值进行分割
         V1 = Value(self.beginIndex, self.valueNum-change)
         tmpIndex = hex(V1.get_decimal_endIndex()+1)
@@ -64,6 +65,14 @@ class Value: # 针对VCB区块链的专门设计的值结构，总量2^259 = 16^
         decimal_beginIndex = self.get_decimal_beginIndex()
         decimal_endIndex = self.get_decimal_endIndex()
         return decimal_targetBegin >= decimal_beginIndex and decimal_targetEnd <= decimal_endIndex
+
+    def isSameValue(self, target): # target是Value类型, 判断target是否就是本value
+        if type(target) != Value:
+            return False
+        if target.beginIndex == self.beginIndex and target.endIndex == self.endIndex and target.valueNum == self.valueNum:
+            return True
+        else:
+            return False
 
 class MTreeProof:
     def __init__(self, MTPrfList = []):

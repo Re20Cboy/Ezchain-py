@@ -110,6 +110,7 @@ class Account:
 
             change = tmpCost-V # 计算找零
 
+            # todo: 找零计算逻辑有错误，少+1
             if change > 0:  # 需要找零，对值进行分割
                 V1, V2 = self.ValuePrfBlockPair[changeValueIndex][0].split_value(change) # V2是找零
                 #创建找零的交易
@@ -267,9 +268,6 @@ class Account:
                     print("VPB检测报错：默克尔树检测未通过")
                     return False # 默克尔树检测未通过，固错误！
 
-                # 记录epoch内的VPB的B的信息
-                oneEpochBList.append((blockIndex[index]))
-
                 if isNewEpoch:
                     # 所有txn中应当有且仅有一个交易将值转移到新的owner手中
                     SpendValueTxnList = [] # 记录在此accTxns中此值被转移的所有交易，合法的情况下，此list的长度应为1
@@ -280,18 +278,23 @@ class Account:
                     if len(SpendValueTxnList) != 1:
                         print("VPB检测报错：存在双花！或者未转移值给owner！")
                         return False # 存在双花！或者未转移值给owner！
+                    # if not value.isSameValue(SpendValueTxnList[0].Value):
+                        # print("VPB检测报错：转移的值并非目标值")
+                        # return False
                     if SpendValueTxnList[0].Recipient != recordOwner:
                         print("VPB检测报错：此值未转移给指定的owner")
                         return False # 此值未转移给指定的owner
                 else:
-                    # 此值尚未转移给新的owner
+                    # 未进入新epoch，即，此值尚未转移给新的owner
                     for txn in ownerAccTxnsList:
                         if txn.check_value_is_in_txn(value):
-                            print("VPB检测报错：此值不应当在此处被提前花费")
-                            return False # 此值不应当在此处被花费！
+                            if txn.Sender != txn.Recipient:  # 若不是转移给自己则计入值的花销列表
+                                print("VPB检测报错：此值不应当在此处被提前花费")
+                                return False # 此值不应当在此处被花费！
 
         # 检测：每个epoch内的B和主链上的布隆过滤器的信息是相符的，即，epoch的owner没有在B上撒谎
         for epochRecord in BList:
+            epochRealBList = [] # 检测每个epoch前，清空真实epoch BList的记录
             (owner, uncheckedBList) = epochRecord
             if len(uncheckedBList) < 1:
                 print("VPB检测报错：本段owner持有值没有记录")

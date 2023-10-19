@@ -250,26 +250,22 @@ if __name__ == "__main__":
     EZsimulate.random_generate_accounts()
     #print('accounts:')
 
-    # 根据账户生成创世块（给每个账户分发token），并更新account本地的数据（V-P-B pair）
-    EZsimulate.generate_GenesisBlock()
-
-    # 账户节点随机生成交易（可能有一些账户没有交易，因为参加交易的账户的数量是随机的）
-    # EZsimulate.AccTxns = EZsimulate.old_random_generate_AccTxns() # 弃用
-    # EZsimulate.AccTxns为AccountTxns的list
-    EZsimulate.AccTxns, ACTxnsRecipientList = EZsimulate.random_generate_AccTxns()
-    for i in range(len(EZsimulate.AccTxns)):
-        EZsimulate.accounts[i].accTxns = EZsimulate.AccTxns[i]
-        EZsimulate.accounts[i].recipientList = ACTxnsRecipientList[i]
-
-    # Node打包收集所有交易形成区块body（可以理解为简单的打包交易）
-    blockBodyMsg = EZsimulate.generate_block_body()
-
     # 初始化p2p网络
     EZsimulate.init_network()
     print('network:')
     print(EZsimulate.network.delay_matrix)
 
+    # 根据账户生成创世块（给每个账户分发token），并更新account本地的数据（V-P-B pair）
+    EZsimulate.generate_GenesisBlock()
+
     for round in range(SIMULATE_ROUND):
+        # 账户节点随机生成交易（可能有一些账户没有交易，因为参加交易的账户的数量是随机的）
+        EZsimulate.AccTxns, ACTxnsRecipientList = EZsimulate.random_generate_AccTxns()
+        for i in range(len(EZsimulate.AccTxns)):
+            EZsimulate.accounts[i].accTxns = EZsimulate.AccTxns[i]
+            EZsimulate.accounts[i].recipientList = ACTxnsRecipientList[i]
+        # Node打包收集所有交易形成区块body（可以理解为简单的打包交易）
+        blockBodyMsg = EZsimulate.generate_block_body()
         # 挖矿模拟
         EZsimulate.begin_mine(blockBodyMsg)
         # sender将交易添加至自己的本地数据库中，并更新所有在持值的proof（V-P-B pair）
@@ -280,4 +276,6 @@ if __name__ == "__main__":
         EZsimulate.sendPrfAndCheck(ACTxnsRecipientList)
         # 重置account中的信息
         EZsimulate.clearOldInfo()
-        
+
+    # 打印链
+    EZsimulate.blockchain.print_chain()
