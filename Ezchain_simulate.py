@@ -152,6 +152,9 @@ class EZsimulate:
 
     def updateSenderVPBpair(self, mTree):
 
+        def get_elements_not_in_B(A, B): # 工具函数：返回在list A中但不在list B中的元素列表
+            return [element for element in A if element not in B]
+
         count = 0 # 用于跟踪记录prfList的index
         # todo: 这里简化了获取VPB中B的流程，真实情况应是：等待区块上链，查看是否包含自身的交易，再确定区块号
         blockIndex = self.blockchain.get_latest_block().index  # 获取最新快的index
@@ -169,28 +172,45 @@ class EZsimulate:
             for txn in senderTxns:
                 # 交易会引起所有Value的prf的变化
                 recipient = txn.Recipient
-                # 此交易中所有存在VPB中的值（注意，有些可能不存在VPB中）
+                # 此交易中所有存在VPB中的值（注意，有些可能不存在VPB中!!!!!）
                 txnVsinVPB = txn.Value
                 first_elements_list = [t[0] for t in self.accounts[i].ValuePrfBlockPair]
-                intersection = set(txnVsinVPB) & set(first_elements_list)
-                intersectionVlist = list(intersection)
+                # todo:这里用交集 & 计算符号是错误的，因为这样是比对内存一致的value，在值转移（深拷贝）多次后，可能出现地址不统一的情况
+                # intersection = set(txnVsinVPB) & set(first_elements_list)
+                intersectionVlist = []
+                for value in txnVsinVPB:
+                    for valueHold in first_elements_list:
+                        if value.isSameValue(valueHold):
+                            intersectionVlist.append(value)
+
                 if intersectionVlist != []: # 若==，则说明此值不在VPB中，是被分裂的值（不应存在的值）
                     # 找出此txn中所有值的在sender中的index
                     index = self.accounts[i].find_VPBpair_via_V(intersectionVlist)
-                    costValueIndex += index
-                    # 为index中每个value添加新的prfUnit
-                    for item in index:
-                        prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
-                                                 ownerMTreePrfList=ownerMTreePrfList)
+                    unrecordedIndex = get_elements_not_in_B(A=index, B=costValueIndex)
+                    if unrecordedIndex != []:
+                        costValueIndex += unrecordedIndex
+                        # 为index中每个value添加新的prfUnit
+                        for item in unrecordedIndex:
+                            prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
+                                                    ownerMTreePrfList=ownerMTreePrfList)
 
-                        self.accounts[i].ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
-                        self.accounts[i].ValuePrfBlockPair[item][2].append(copy.deepcopy(blockIndex))
+                            self.accounts[i].ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
+                            self.accounts[i].ValuePrfBlockPair[item][2].append(copy.deepcopy(blockIndex))
+                            # 测试是否有重复值加入
+                            test = self.accounts[i].ValuePrfBlockPair[item][2]
+                            if len(test)>2 and test[-1]==test[-2]:
+                                raise ValueError("发现VPB添加错误！！！！")
+
             for j, VPBpair in enumerate(self.accounts[i].ValuePrfBlockPair, start=0):
                 if j not in costValueIndex:
                     prfUnit = unit.ProofUnit(owner=owner, ownerAccTxnsList=ownerAccTxnsList,
                                              ownerMTreePrfList=ownerMTreePrfList)
                     self.accounts[i].ValuePrfBlockPair[j][1].add_prf_unit(prfUnit)
                     self.accounts[i].ValuePrfBlockPair[j][2].append(copy.deepcopy(blockIndex))
+                    # 测试是否有重复值加入
+                    test = self.accounts[i].ValuePrfBlockPair[j][2]
+                    if len(test) > 2 and test[-1] == test[-2]:
+                        raise ValueError("发现VPB添加错误！！！！")
 
     def updateBloomPrf(self):
         txnAccNum = len(self.AccTxns) # 参与本轮交易的账户的数量

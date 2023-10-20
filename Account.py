@@ -57,7 +57,7 @@ class Account:
         index = []
         for value in V:
             for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
-                if value == VPBpair[0]:
+                if VPBpair[0].isSameValue(value):
                     index.append(i)
                     break
         if index != []:
@@ -110,7 +110,6 @@ class Account:
 
             change = tmpCost-V # 计算找零
 
-            # todo: 找零计算逻辑有错误，少+1
             if change > 0:  # 需要找零，对值进行分割
                 V1, V2 = self.ValuePrfBlockPair[changeValueIndex][0].split_value(change) # V2是找零
                 #创建找零的交易
@@ -121,13 +120,13 @@ class Account:
                                                  nonce=tmpNonce, signature=tmpSig, value=[V1],
                                                  tx_hash=tmpTxnHash, time=tmpTime)
                 self.costedValues.append(V1)
-                # self.costedValues.append(V2) # V2不用加入已被花费的list！！！
             else:
                 changeValueIndex = -1
             return costList, changeValueIndex, txn_2_sender, txn_2_recipient
-
+        # todo:重新写找零逻辑，最大化利用零钱
         accTxns = []
         tmpBalance = self.balance
+
         for item in randomRecipients:
             tmpTime = str(datetime.datetime.now())
             tmpTxnHash = '0x19f1df2c7ee6b464720ad28e903aeda1a5ad8780afc22f0b960827bd4fcf656d' # todo: 交易哈希暂用定值，待实现
@@ -246,13 +245,14 @@ class Account:
             else: # 非创世块检测
                 isNewEpoch = False
                 oneEpochBList.append(blockIndex[index])
-
+                tmpSender = None # 记录每个epoch变更时的交易的发送者，以便验证bloom
                 if recordOwner != prfUnit.owner: # 说明 owner 已改变，该值进入下一个owner持有的epoch
                     isNewEpoch = True
                     lastBlockIndex = oneEpochBList.pop() # 获得最后一个交易的区块号
                     # 更新epoch内的VPB的B的信息
                     BList.append((copy.deepcopy(recordOwner), copy.deepcopy(oneEpochBList)))
                     oneEpochBList = [lastBlockIndex] # 为下一段证明保留最初的交易所在的区块号
+                    tmpSender = recordOwner
                     recordOwner = prfUnit.owner  # 更新持有者信息
 
                 ownerAccTxnsList = prfUnit.ownerAccTxnsList
@@ -278,9 +278,9 @@ class Account:
                     if len(SpendValueTxnList) != 1:
                         print("VPB检测报错：存在双花！或者未转移值给owner！")
                         return False # 存在双花！或者未转移值给owner！
-                    # if not value.isSameValue(SpendValueTxnList[0].Value):
-                        # print("VPB检测报错：转移的值并非目标值")
-                        # return False
+                    if tmpSender != None and tmpSender not in blockchain.chain[blockIndex[index]].bloom:
+                        print("VPB检测报错：值转移时的Bloom过滤器检测错误！")
+                        return False
                     if SpendValueTxnList[0].Recipient != recordOwner:
                         print("VPB检测报错：此值未转移给指定的owner")
                         return False # 此值未转移给指定的owner
@@ -288,7 +288,7 @@ class Account:
                     # 未进入新epoch，即，此值尚未转移给新的owner
                     for txn in ownerAccTxnsList:
                         if txn.check_value_is_in_txn(value):
-                            if txn.Sender != txn.Recipient:  # 若不是转移给自己则计入值的花销列表
+                            if txn.Sender != txn.Recipient:
                                 print("VPB检测报错：此值不应当在此处被提前花费")
                                 return False # 此值不应当在此处被花费！
 
@@ -305,21 +305,30 @@ class Account:
                 print("VPB检测报错：owner持有值的区块号记录有误")
                 return False # owner持有值的区块号记录有误！
             # 在blockchain中根据ownerBegin和ownerEnd进行搜索符合bloom过滤器的的区块index
+            skipBeginFlag = True # 跳过首个bloom，因为已在上面进行过检测
             for i in range(ownerBegin, ownerEnd+1):
                 if i != 0: # i=0为创世块，创世块已经过验证，固跳过
-                    if owner in blockchain.chain[i].bloom:
+                    if owner in blockchain.chain[i].bloom and not skipBeginFlag:
                         epochRealBList.append(i)
+                        skipBeginFlag = False
                 else: # i=0为创世块，创世块已经过验证，固直接加入
                     epochRealBList.append(i)
-            # 对比epochRealBList和uncheckedBList
-            if epochRealBList != uncheckedBList:
-                # 若不同则需要检测bloom proof，排除被bloom过滤器“误伤”的可能
-                if bloomPrf == []:
-                    print("VPB检测报错：没有提供bloom proof")
-                    return False # 没有提供bloom proof，因此没有误伤，则说明owner提供的值持有记录和真实记录不同，错误！
-                else:
-                    # todo: 检测bloom proof
-                    pass
+
+            # 注意：value的新epoch的新owner不一定在当前块的bloom中！！！！
+            # 因为原本的epochRealBList只会根据bloom记录前任owner。
+            if epochRealBList != [0]: # 非创世块的情况
+                uncheckedBList.pop(0) # 删去第一个元素，因为此时有可能：用户是此value的owner但不在bloom中（因为此用户未发起交易，只是接受了该值），且epoch更新时的bloom检测已在前做过。
+                # 对比epochRealBList和uncheckedBList
+                if epochRealBList != uncheckedBList:
+                    # 若不同则需要检测bloom proof，排除被bloom过滤器“误伤”的可能
+                    if bloomPrf == []:
+                        print("VPB检测报错：没有提供bloom proof")
+                        return False # 没有提供bloom proof，因此没有误伤，则说明owner提供的值持有记录和真实记录不同，错误！
+                    else:
+                        # todo: 检测bloom proof
+                        pass
+            else: # epochRealBList == [0]，创世块检测自动为True
+                pass
 
         return True
 
