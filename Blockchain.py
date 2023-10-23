@@ -25,14 +25,14 @@ class Blockchain:
         return True
 
     def print_chain(self):
-        print("=== Blockchain ===")
+        print("///////////////// Blockchain /////////////////")
         for block in self.chain:
             print(f"Block {block.index}")
             print(f"Timestamp: {block.time}")
             print(f"Miner: {block.miner}")
-            print(f"Previous Hash: {block.preHash}")
+            print(f"Previous Hash: {str(block.preHash)}")
             print(f"Merkle Tree Root: {block.mTreeRoot}")
             print(f"Nonce: {block.nonce}")
             print(f"Bloom Filter Size: {len(block.bloom)}")
             print(f"Signature: {block.sig}")
-            print("=================")
+            print("---------------------")

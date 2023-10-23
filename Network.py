@@ -33,7 +33,9 @@ class Network:
                     visited.add(neighbor)
 
                     neighbor_time = self.simulate_delay(msg.get_size(),
-                                                                 self.delay_matrix[current_node][neighbor])
+                                                        self.delay_matrix[current_node][neighbor])
+                    if neighbor_time == None:
+                        raise ValueError("neighbor_time未被定义！！！")
 
                     checkFlag = nodeList[neighbor].receive_msg(msg)  # todo:待实现接收msg的处理逻辑
                     if not checkFlag:
@@ -50,8 +52,6 @@ class Network:
 
         broadcast_time = recursive_broadcast(nodeID, 0)
         return broadcast_time
-
-
 
     def p2p_broadcast(self, nodeID, msg, nodeList):
         visited = set()  # 用于存储已经访问的节点
@@ -80,7 +80,7 @@ class Network:
                     #todo: neighbor接收msg的处理逻辑
                     #print("Broadcasting message from node ", current_node, " to ", neighbor)
                     delay_time = pre_delay + self.simulate_delay(sys.getsizeof(brd_msg), self.delay_matrix[current_node][neighbor])
-                    checkFlag = nodeList[neighbor].receive_msg(brd_msg) #todo:待实现接收msg的处理逻辑
+                    checkFlag = nodeList[neighbor].receive_msg(brd_msg)
                     if not checkFlag:
                         return -1
                     visited.add(neighbor)

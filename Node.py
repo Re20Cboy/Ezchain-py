@@ -5,6 +5,12 @@ from const import *
 import random
 import time
 import Bloom
+# 签名所需引用
+import string
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
 
 class Node:
     def __init__(self, id, neighbors = [], port = 0):
@@ -16,6 +22,48 @@ class Node:
         #self.difficulty = 4  # PoW共识难度
         self.tmpBlockMsg = None # 临时存储的区块信息
         self.tmpBlockBodyMsg = None # 临时存储的区块详细信息（默克尔树格式）
+        self.privateKeyPath = None
+        self.publicKeyPath = None
+        self.addr = None
+        self.generate_random_node() # 随机生成node的公私钥对及地址信息
+
+    def generate_random_node(self): # 随机生成node的公钥、私钥及地址信息
+        # 生成随机地址
+        self.addr = ''.join(random.choices(string.ascii_letters + string.digits, k=42)) # bitcoin地址字符数为42
+        # 生成私钥
+        private_key = ec.generate_private_key(ec.SECP384R1())
+        # 从私钥中获取公钥
+        public_key = private_key.public_key()
+        # 保存公私钥的地址：
+        privatePath = NODE_PRIVATE_KEY_PATH + "private_key_node_"+str(self.id)+".pem"
+        publicPath = NODE_PUBLIC_KEY_PATH + "public_key_node_"+str(self.id)+".pem"
+        self.privateKeyPath = privatePath
+        self.publicKeyPath = publicPath
+        # 保存私钥到文件（请谨慎操作，不要轻易泄露私钥）
+        with open(privatePath, "wb") as f:
+            f.write(private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+        # 保存公钥到文件（公钥可以公开分发给需要验证方）
+        with open(publicPath, "wb") as f:
+            f.write(public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            ))
+    """
+        private_key = ec.generate_private_key(ec.SECP256K1())
+        self.privateKey = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption()
+        )
+        self.publicKey = private_key.public_key().public_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PublicFormat.SubjectPublicKeyInfo
+        )
+    """
 
     def random_set_neighbors(self, nodeNum = NODE_NUM): # nodeNum表示所有节点的数量
         def random_sampling(nodeNum):
@@ -28,6 +76,39 @@ class Node:
 
     def start_mining(self):
         pass
+
+    def sig_block(self, block):
+        # 从私钥路径加载私钥
+        with open(self.privateKeyPath, "rb") as key_file:
+            private_key = load_pem_private_key(key_file.read(), password=None)
+        # 使用SHA256哈希算法计算区块的哈希值
+        block_hash = hashes.Hash(hashes.SHA256())
+        block_hash.update(block.block2str().encode('utf-8'))
+        digest = block_hash.finalize()
+        signature_algorithm = ec.ECDSA(hashes.SHA256())
+        # 对区块哈希值进行签名
+        signature = private_key.sign(data=digest, signature_algorithm=signature_algorithm)
+        return signature
+
+    def check_block_sig(self, block, signature, load_public_key_path):
+        # 从公钥路径加载公钥
+        with open(load_public_key_path, "rb") as key_file:
+            public_key = load_pem_public_key(key_file.read())
+        # 使用SHA256哈希算法计算区块的哈希值
+        block_hash = hashes.Hash(hashes.SHA256())
+        block_hash.update(block.block2str().encode('utf-8'))
+        digest = block_hash.finalize()
+        signature_algorithm = ec.ECDSA(hashes.SHA256())
+        # 验证签名
+        try:
+            public_key.verify(
+                signature,
+                digest,
+                signature_algorithm
+            )
+            return True
+        except:
+            return False
 
     def create_new_block_body(self):
         blockBody = Message.BlockBodyMsg()
@@ -46,7 +127,12 @@ class Node:
         for item in self.tmpBlockBodyMsg.info_Txns:
             block.bloom.add(item.Sender)
 
+        # 对区块进行签名
+        sig = self.sig_block(block)
+        block.sig = sig
+
         self.tmpBlockMsg = Message.BlockMsg(block)
+        self.blockchain.add_block(block)
 
     def is_valid_block(self, block):
         # 判断区块是否有效
@@ -59,9 +145,17 @@ class Node:
     def receive_msg(self, msg):
         # 接收其他节点发送的区块
         if type(msg) == Message.BlockMsg:
-            # 验证block的数据合规性
+            # 验证block的数据合规性:
             # 1. 数字签名验证； 2. Nonce验证； 3. 数据格式验证 ###注意此处不需要对bloom进行验证，直接使用bloom来进行交易打包和挖掘新块即可。
             # 此过程几乎不耗时
+
+            # 1. 数字签名验证；
+            uncheckedBlock = msg.info
+            uncheckedSig = uncheckedBlock.sig
+            loadPKPath = NODE_PUBLIC_KEY_PATH + "public_key_node_"+str(uncheckedBlock.miner)+".pem"
+            if not self.check_block_sig(block=uncheckedBlock, signature=uncheckedSig, load_public_key_path=loadPKPath):
+                raise ValueError("区块签名检测错误！")
+
             # 将此块添加到本地区块链中
             self.blockchain.add_block(msg.info)
             pass
@@ -80,15 +174,17 @@ class Node:
                 return False
 
             tmpBloom = Bloom.BloomFilter()
-            for txns in msg.info_Txns:
+            for accTxns in msg.info_Txns:
                 # check account是否重复
-                tmpSender = txns.AccTxns[0].Sender
-                for txn in txns.AccTxns:
-                    if not txn.checkTxn():  # todo
+                tmpSender = accTxns.AccTxns[0].Sender
+                tmpSenderID = accTxns.SenderID
+                for txn in accTxns.AccTxns:
+                    load_public_key_path = ACCOUNT_PUBLIC_KEY_PATH+"public_key_node_"+str(tmpSenderID)+".pem"
+                    if not txn.check_txn_sig(load_public_key_path):
                         return False
                     if tmpSender is not txn.Sender:
                         return False
-                tmpBloom.add(txns.Sender)
+                tmpBloom.add(accTxns.Sender)
 
             # check bloom
             if self.blockchain.get_latest_block().get_bloom().bit_array != tmpBloom.bit_array:

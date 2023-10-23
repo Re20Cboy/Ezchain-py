@@ -1,33 +1,36 @@
 import random
-import string
-# 使用ECC椭圆密码
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import serialization
 import datetime
 import unit
 import Transaction
 import copy
 from const import *
 import hashlib
+# 签名所需引用
+import string
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
 
 class Account:
-    def __init__(self):
+    def __init__(self, ID):
         self.addr = None
-        self.privateKey = None
-        self.publicKey = None
+        self.id = ID
+        self.privateKeyPath = None
+        self.publicKeyPath = None
         self.ValuePrfBlockPair = [] # 当前账户拥有的值和对应的证据、区块号，以及所在list的编号对
         # self.prfChain = [] # 此账户所有证明的集合，即，公链上所有和本账户相关的prf集合
         self.bloomPrf = [] # 被bloom过滤器“误伤”时，提供证据（哪些账户可以生成此bloom）表明自己的“清白”。
         self.accTxns = [] # 本账户本轮提交的交易集合
         self.accTxnsIndex = None # 本账户本轮提交的交易集合在blockbody中的编号位置，用于提取交易证明
         self.balance = 0 # 统计账户Value计算余额
-        self.costedValues = [] # 用于记录本轮已花销的Values
+        self.costedValuesAndRecipes = [] # 用于记录本轮已花销的Values，type为[(value, 新的owner即交易的接收者), (..., ...), ...]
         self.recipientList = []
 
     def clear_info(self):
         self.accTxns = []
         self.accTxnsIndex = None
-        self.costedValues = []
+        self.costedValuesAndRecipes = []
         self.recipientList = []
 
     def add_VPBpair(self, item):
@@ -65,24 +68,34 @@ class Account:
         else:
             raise ValueError("未找到对应的Value")
 
-
     def generate_random_account(self):
         # 生成随机地址
         self.addr = ''.join(random.choices(string.ascii_letters + string.digits, k=42)) #bitcoin地址字符数为42
-        # 生成随机公钥和私钥
-        private_key = ec.generate_private_key(ec.SECP256K1())
-        self.privateKey = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        self.publicKey = private_key.public_key().public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
+        # 生成私钥
+        private_key = ec.generate_private_key(ec.SECP384R1())
+        # 从私钥中获取公钥
+        public_key = private_key.public_key()
+        # 保存公私钥的地址：
+        privatePath = ACCOUNT_PRIVATE_KEY_PATH + "private_key_node_"+str(self.id)+".pem"
+        publicPath = ACCOUNT_PUBLIC_KEY_PATH + "public_key_node_"+str(self.id)+".pem"
+        self.privateKeyPath = privatePath
+        self.publicKeyPath = publicPath
+        # 保存私钥到文件（请谨慎操作，不要轻易泄露私钥）
+        with open(privatePath, "wb") as f:
+            f.write(private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption()
+            ))
+        # 保存公钥到文件（公钥可以公开分发给需要验证方）
+        with open(publicPath, "wb") as f:
+            f.write(public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo
+            ))
 
     def random_generate_txns(self, randomRecipients):
-        def pick_values_and_generate_txns(V, tmpSender, tmpRecipient, tmpNonce, tmpSig, tmpTxnHash, tmpTime): # V为int，是要挑拣的值的总量
+        def pick_values_and_generate_txns(V, tmpSender, tmpRecipient, tmpNonce, tmpTxnHash, tmpTime): # V为int，是要挑拣的值的总量
             if V < 1:
                 raise ValueError("参数V不能小于1")
             tmpCost = 0 # 动态记录要消耗多少值
@@ -93,7 +106,7 @@ class Account:
             value_Enough = False
             for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
                 value = VPBpair[0]
-                if value in self.costedValues:
+                if value in [i[0] for i in self.costedValuesAndRecipes]:
                     continue
                 tmpCost += value.valueNum
                 if tmpCost >= V: # 满足值的需求了，花费到此value为止
@@ -114,15 +127,18 @@ class Account:
                 V1, V2 = self.ValuePrfBlockPair[changeValueIndex][0].split_value(change) # V2是找零
                 #创建找零的交易
                 txn_2_sender = Transaction.Transaction(sender=tmpSender, recipient=tmpSender,
-                                                 nonce=tmpNonce, signature=tmpSig, value=[V2],
+                                                 nonce=tmpNonce, signature=None, value=[V2],
                                                  tx_hash=tmpTxnHash, time=tmpTime)
+                txn_2_sender.sig_txn(self.privateKeyPath)
                 txn_2_recipient = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
-                                                 nonce=tmpNonce, signature=tmpSig, value=[V1],
+                                                 nonce=tmpNonce, signature=None, value=[V1],
                                                  tx_hash=tmpTxnHash, time=tmpTime)
-                self.costedValues.append(V1)
+                txn_2_recipient.sig_txn(self.privateKeyPath)
+                self.costedValuesAndRecipes.append((V1, tmpRecipient))
             else:
                 changeValueIndex = -1
             return costList, changeValueIndex, txn_2_sender, txn_2_recipient
+
         # todo:重新写找零逻辑，最大化利用零钱
         accTxns = []
         tmpBalance = self.balance
@@ -133,36 +149,39 @@ class Account:
             tmpSender = self.addr
             tmpRecipient = item.addr
             tmpNonce = 0  # 待补全
-            tmpSig = unit.generate_signature(tmpSender)  # todo: 交易的签名待补全
+            # tmpSig = unit.generate_signature(tmpSender)
             tmpV = random.randint(1, 1000)
             if tmpBalance <= tmpV: # 余额大于0时才能交易！
                 raise ValueError("余额不足！！！")
             else:
                 tmpBalance -= tmpV
-            costList, changeValueIndex, changeTxn2Sender, changeTxn2Recipient = pick_values_and_generate_txns(tmpV, tmpSender, tmpRecipient, tmpNonce, tmpSig, tmpTxnHash, tmpTime) # 花费的值和找零
+
+            # costList是花费的值的索引列表（包括需要找零的值），changeValueIndex是唯一找零值的索引（已包含在costList中）
+            costList, changeValueIndex, changeTxn2Sender, changeTxn2Recipient = pick_values_and_generate_txns(tmpV, tmpSender, tmpRecipient, tmpNonce, tmpTxnHash, tmpTime) # 花费的值和找零
             if changeValueIndex < 0: # 不需要找零
                 tmpValues = []
                 for index in costList:
                     tmpValues.append(self.ValuePrfBlockPair[index][0])
-                    self.costedValues.append(self.ValuePrfBlockPair[index][0])
+                    self.costedValuesAndRecipes.append((self.ValuePrfBlockPair[index][0], tmpRecipient))
                     # 删除此值
                     # self.delete_VPBpair(i)
                 tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
-                                                 nonce=tmpNonce, signature=tmpSig, value=tmpValues,
+                                                 nonce=tmpNonce, signature=None, value=tmpValues,
                                                  tx_hash=tmpTxnHash, time=tmpTime)
+                tmpTxn.sig_txn(load_private_key_path=self.privateKeyPath)
                 accTxns.append(tmpTxn)
             else: # 需要找零
                 tmpValues = []
                 for i in costList:
-                    if i != changeValueIndex:
+                    if i != changeValueIndex: # 表示i被花费又不是唯一找零值
                         tmpValues.append(self.ValuePrfBlockPair[i][0])
-                        self.costedValues.append(self.ValuePrfBlockPair[i][0])
-                    # 删除此值
-                    # self.delete_VPBpair(i)
-                if tmpValues != []:
+                        self.costedValuesAndRecipes.append((self.ValuePrfBlockPair[i][0], tmpRecipient))
+
+                if tmpValues != []: # 非找零值且被花费的
                     tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
-                                                     nonce=tmpNonce, signature=tmpSig, value=tmpValues,
+                                                     nonce=tmpNonce, signature=None, value=tmpValues,
                                                      tx_hash=tmpTxnHash, time=tmpTime)
+                    tmpTxn.sig_txn(load_private_key_path=self.privateKeyPath)
                     accTxns.append(tmpTxn)
 
                 tmpP = self.ValuePrfBlockPair[changeValueIndex][1]
@@ -181,7 +200,7 @@ class Account:
         pass
 
     def updateBloomPrf(self, bloom, txnAccList, blockIndex):
-        if self.costedValues == [] and self.addr in bloom:
+        if self.costedValuesAndRecipes == [] and self.addr in bloom:
             # 被bloom误判，执行添加布隆证明操作
             self.bloomPrf.append([copy.deepcopy(txnAccList), copy.deepcopy(blockIndex)]) # 布隆证明 = [此布隆过滤器中所有账户的地址，此布隆隶属的区块号]
 
@@ -216,6 +235,7 @@ class Account:
         epochRealBList = [] # 记录epoch内的真实的B的信息，用于和VPB中的B进行对比
         BList = [] # 记录epoch内的VPB的B的信息，结构为：[(owner,[list of block index]), (...), (...), ...]用于进行对比验证
         oneEpochBList = [] # 结构为：[list of block index]
+        epochChangeList = [] # 记录epoch变化时的区块号
 
         # 3 检验proof的正确性
         for index, prfUnit in enumerate(valuePrf, start=0):
@@ -226,7 +246,7 @@ class Account:
                 ownerMTreePrfList = prfUnit.ownerMTreePrfList
                 # 创世块的检测
                 if ownerMTreePrfList == [blockchain.chain[0].get_mTreeRoot()]:  # 说明这是创世块
-                    tmpGenesisAccTxns = Transaction.AccountTxns(GENESIS_SENDER, ownerAccTxnsList)
+                    tmpGenesisAccTxns = Transaction.AccountTxns(GENESIS_SENDER, -1, ownerAccTxnsList)
                     tmpEncode = tmpGenesisAccTxns.Encode()
                     if hash(tmpEncode) != blockchain.chain[0].get_mTreeRoot():
                         print("VPB检测报错：交易集合哈希错误，节点伪造了创世块中的交易")
@@ -252,6 +272,7 @@ class Account:
                     # 更新epoch内的VPB的B的信息
                     BList.append((copy.deepcopy(recordOwner), copy.deepcopy(oneEpochBList)))
                     oneEpochBList = [lastBlockIndex] # 为下一段证明保留最初的交易所在的区块号
+                    epochChangeList.append(lastBlockIndex)
                     tmpSender = recordOwner
                     recordOwner = prfUnit.owner  # 更新持有者信息
 
@@ -259,8 +280,8 @@ class Account:
                 ownerMTreePrfList = prfUnit.ownerMTreePrfList
 
                 # 检测：ownerAccTxnsList和ownerMTreePrfList的信息是相符的
-                # 注意，这里的Encode()函数只对accTxns进行编码，因此可以设sender='sender'，结果不影响。
-                uncheckedAccTxns = Transaction.AccountTxns(sender='sender', accTxns=ownerAccTxnsList)
+                # 注意，这里的Encode()函数只对accTxns进行编码，因此可以设sender='sender'，senderID=None 结果不影响。
+                uncheckedAccTxns = Transaction.AccountTxns(sender='sender', senderID=None, accTxns=ownerAccTxnsList)
                 uncheckedMTreePrf = unit.MTreeProof(MTPrfList=ownerMTreePrfList)
 
                 # 检测：ownerMTreePrfList和主链此块中的root是相符的
@@ -272,9 +293,13 @@ class Account:
                     # 所有txn中应当有且仅有一个交易将值转移到新的owner手中
                     SpendValueTxnList = [] # 记录在此accTxns中此值被转移的所有交易，合法的情况下，此list的长度应为1
                     for txn in ownerAccTxnsList:
-                        if txn.check_value_is_in_txn(value):
-                            if txn.Sender != txn.Recipient: # 若不是转移给自己则计入值的花销列表
+                        count = txn.count_value_in_value(value)
+                        if count == 1: # =0表示未转移该值，>1则表明在此交易内存在双花
+                            if txn.Sender != txn.Recipient:  # 若不是转移给自己则计入值的花销列表
                                 SpendValueTxnList.append(txn)
+                        elif count > 1:
+                            print("VPB检测报错：单个交易内存在双花！")
+                            return False  # 存在双花！或者未转移值给owner！
                     if len(SpendValueTxnList) != 1:
                         print("VPB检测报错：存在双花！或者未转移值给owner！")
                         return False # 存在双花！或者未转移值给owner！
@@ -287,48 +312,50 @@ class Account:
                 else:
                     # 未进入新epoch，即，此值尚未转移给新的owner
                     for txn in ownerAccTxnsList:
-                        if txn.check_value_is_in_txn(value):
+                        if txn.count_value_intersect_txn(value) != 0:
                             if txn.Sender != txn.Recipient:
                                 print("VPB检测报错：此值不应当在此处被提前花费")
                                 return False # 此值不应当在此处被花费！
 
         # 检测：每个epoch内的B和主链上的布隆过滤器的信息是相符的，即，epoch的owner没有在B上撒谎
-        for epochRecord in BList:
-            epochRealBList = [] # 检测每个epoch前，清空真实epoch BList的记录
+        if len(BList) != len(epochChangeList):
+            print("VPB检测报错：len(BList) != len(epochChangeList)")
+            return False
+        oldEpochFlag = 0
+        for index, epochRecord in enumerate(BList, start=0):
+            fullEpochBList = range(oldEpochFlag, epochChangeList[index])
+            realEpochBlist = []
             (owner, uncheckedBList) = epochRecord
+
             if len(uncheckedBList) < 1:
                 print("VPB检测报错：本段owner持有值没有记录")
-                return False # 本段owner持有值没有记录，固错误！
-            ownerBegin = uncheckedBList[0] # owner刚拥有该值时的block index
-            ownerEnd = uncheckedBList[-1] # owner将在下一个区块将此值转移给其他owner，即，最后一个持有此值的block index
+                return False  # 本段owner持有值没有记录，固错误！
+
+            ownerBegin = uncheckedBList[0]  # owner刚拥有该值时的block index
+            ownerEnd = uncheckedBList[-1]  # owner将在下一个区块将此值转移给其他owner，即，最后一个持有此值的block index
             if ownerEnd < ownerBegin:
                 print("VPB检测报错：owner持有值的区块号记录有误")
-                return False # owner持有值的区块号记录有误！
-            # 在blockchain中根据ownerBegin和ownerEnd进行搜索符合bloom过滤器的的区块index
-            skipBeginFlag = True # 跳过首个bloom，因为已在上面进行过检测
-            for i in range(ownerBegin, ownerEnd+1):
-                if i != 0: # i=0为创世块，创世块已经过验证，固跳过
-                    if owner in blockchain.chain[i].bloom and not skipBeginFlag:
-                        epochRealBList.append(i)
-                        skipBeginFlag = False
-                else: # i=0为创世块，创世块已经过验证，固直接加入
-                    epochRealBList.append(i)
+                return False  # owner持有值的区块号记录有误！
 
-            # 注意：value的新epoch的新owner不一定在当前块的bloom中！！！！
-            # 因为原本的epochRealBList只会根据bloom记录前任owner。
-            if epochRealBList != [0]: # 非创世块的情况
-                uncheckedBList.pop(0) # 删去第一个元素，因为此时有可能：用户是此value的owner但不在bloom中（因为此用户未发起交易，只是接受了该值），且epoch更新时的bloom检测已在前做过。
-                # 对比epochRealBList和uncheckedBList
-                if epochRealBList != uncheckedBList:
-                    # 若不同则需要检测bloom proof，排除被bloom过滤器“误伤”的可能
-                    if bloomPrf == []:
-                        print("VPB检测报错：没有提供bloom proof")
-                        return False # 没有提供bloom proof，因此没有误伤，则说明owner提供的值持有记录和真实记录不同，错误！
-                    else:
-                        # todo: 检测bloom proof
-                        pass
-            else: # epochRealBList == [0]，创世块检测自动为True
-                pass
+            for item in fullEpochBList:
+                if owner in blockchain.chain[item].bloom:
+                    realEpochBlist.append(item)
+
+            # 不需要检验owner持有的第一个块，因为已在前面检测过
+            if len(uncheckedBList) > 0 and uncheckedBList[0] == oldEpochFlag:
+                uncheckedBList.pop(0)
+            if len(realEpochBlist) > 0 and realEpochBlist[0] == oldEpochFlag:
+                realEpochBlist.pop(0)
+
+            if uncheckedBList != realEpochBlist:
+                # 若不同则需要检测bloom proof，排除被bloom过滤器“误伤”的可能
+                if bloomPrf == []:
+                    print("VPB检测报错：没有提供bloom proof")
+                    return False  # 没有提供bloom proof，因此没有误伤，则说明owner提供的值持有记录和真实记录不同，错误！
+                else:
+                    # todo: 检测bloom proof
+                    pass
+            oldEpochFlag = epochChangeList[index]
 
         return True
 

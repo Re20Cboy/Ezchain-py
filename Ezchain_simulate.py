@@ -37,7 +37,7 @@ class EZsimulate:
 
     def random_generate_accounts(self, accountNum = ACCOUNT_NUM):
         for i in range(accountNum):
-            tmpAccount = Account.Account()
+            tmpAccount = Account.Account(ID=i)
             tmpAccount.generate_random_account()
             self.accounts.append(tmpAccount)
 
@@ -58,14 +58,16 @@ class EZsimulate:
         accountTxns = []
         accountTxnsRecipientList = []
         allocations = distribute_transactions(numTxns, randomAccNum)
-        for i in range(randomAccNum):#随机本轮发起交易的账户数量
+        for i in range(randomAccNum): # 随机本轮发起交易的账户数量
             allocTxnsNum = allocations[i] # 读取本次要读取的交易数量
             randomRecipientsIndexList = random.sample(range(len(self.accounts)), allocTxnsNum) # 随机生成本轮账户i需要转发的对象账户的索引
+            if i in randomRecipientsIndexList:
+                randomRecipientsIndexList.remove(i) # 账户i不能向自己发起交易，因此需要删除i自己
             randomRecipients = []
             for tmp in randomRecipientsIndexList:
                 randomRecipients.append(self.accounts[tmp])
             tmpAccTxn = self.accounts[i].random_generate_txns(randomRecipients)
-            accountTxns.append(Transaction.AccountTxns(self.accounts[i].addr, tmpAccTxn))
+            accountTxns.append(Transaction.AccountTxns(self.accounts[i].addr, i, tmpAccTxn))
             self.accounts[i].accTxnsIndex = i # 设置账户对于其提交交易在区块中位置的索引
             accountTxnsRecipientList.append(randomRecipientsIndexList)
         return accountTxns, accountTxnsRecipientList
@@ -84,7 +86,7 @@ class EZsimulate:
                                                          tx_hash=0, time=0)
             genesisAccTxns.append(Txn)
         # 生成创世块
-        GAccTxns = Transaction.AccountTxns(GENESIS_SENDER, genesisAccTxns)
+        GAccTxns = Transaction.AccountTxns(sender=GENESIS_SENDER, senderID=None, accTxns=genesisAccTxns)
         encodedGAccTxns = [GAccTxns.Encode()]
         preBlockHash = '0x7777777'
         blockIndex = 0
@@ -148,8 +150,6 @@ class EZsimulate:
             else:
                 print('Block body broadcast cost ' + str(block_body_brd_delay) + 's')
 
-            # 将区块中的证据广播给相应的用户
-
     def updateSenderVPBpair(self, mTree):
 
         def get_elements_not_in_B(A, B): # 工具函数：返回在list A中但不在list B中的元素列表
@@ -158,7 +158,6 @@ class EZsimulate:
         count = 0 # 用于跟踪记录prfList的index
         # todo: 这里简化了获取VPB中B的流程，真实情况应是：等待区块上链，查看是否包含自身的交易，再确定区块号
         blockIndex = self.blockchain.get_latest_block().index  # 获取最新快的index
-
         for i, accTxns in enumerate(self.AccTxns, start=0):
             sender = accTxns.Sender # sender的account类型为self.accounts[i]
             senderTxns = accTxns.AccTxns
@@ -169,18 +168,44 @@ class EZsimulate:
             count += 1
             costValueIndex = [] # 用于记录本轮中所有参与交易的值的VPB对的index
 
+            VList = [t[0] for t in self.accounts[i].ValuePrfBlockPair]
+            costedValueAndRecipeList = self.accounts[i].costedValuesAndRecipes
+            for (costedV, recipient) in costedValueAndRecipeList: # 账户i本轮花费的值
+                for item, V in enumerate(VList, start=0): # 账户i当前持有的值
+                    if V.isSameValue(costedV):
+                        prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
+                                                 ownerMTreePrfList=ownerMTreePrfList)
+                        self.accounts[i].ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
+                        self.accounts[i].ValuePrfBlockPair[item][2].append(copy.deepcopy(blockIndex))
+                        costValueIndex.append(item)
+                        # 测试是否有重复值加入
+                        test = self.accounts[i].ValuePrfBlockPair[item][2]
+                        if len(test) > 2 and test[-1] == test[-2]:
+                            raise ValueError("发现VPB添加错误！！！！")
+
+            for j, VPBpair in enumerate(self.accounts[i].ValuePrfBlockPair, start=0):
+                if j not in costValueIndex:
+                    prfUnit = unit.ProofUnit(owner=owner, ownerAccTxnsList=ownerAccTxnsList,
+                                             ownerMTreePrfList=ownerMTreePrfList)
+                    self.accounts[i].ValuePrfBlockPair[j][1].add_prf_unit(prfUnit)
+                    self.accounts[i].ValuePrfBlockPair[j][2].append(copy.deepcopy(blockIndex))
+                    # 测试是否有重复值加入
+                    test = self.accounts[i].ValuePrfBlockPair[j][2]
+                    if len(test) > 2 and test[-1] == test[-2]:
+                        raise ValueError("发现VPB添加错误！！！！")
+        """
             for txn in senderTxns:
                 # 交易会引起所有Value的prf的变化
                 recipient = txn.Recipient
                 # 此交易中所有存在VPB中的值（注意，有些可能不存在VPB中!!!!!）
-                txnVsinVPB = txn.Value
+                VsinTxn = txn.Value
                 first_elements_list = [t[0] for t in self.accounts[i].ValuePrfBlockPair]
                 # todo:这里用交集 & 计算符号是错误的，因为这样是比对内存一致的value，在值转移（深拷贝）多次后，可能出现地址不统一的情况
                 # intersection = set(txnVsinVPB) & set(first_elements_list)
                 intersectionVlist = []
-                for value in txnVsinVPB:
+                for value in VsinTxn:
                     for valueHold in first_elements_list:
-                        if value.isSameValue(valueHold):
+                        if value.isSameValue(valueHold): # todo:这里使用isSameValue的判断逻辑是正确的嘛？
                             intersectionVlist.append(value)
 
                 if intersectionVlist != []: # 若==，则说明此值不在VPB中，是被分裂的值（不应存在的值）
@@ -200,17 +225,7 @@ class EZsimulate:
                             test = self.accounts[i].ValuePrfBlockPair[item][2]
                             if len(test)>2 and test[-1]==test[-2]:
                                 raise ValueError("发现VPB添加错误！！！！")
-
-            for j, VPBpair in enumerate(self.accounts[i].ValuePrfBlockPair, start=0):
-                if j not in costValueIndex:
-                    prfUnit = unit.ProofUnit(owner=owner, ownerAccTxnsList=ownerAccTxnsList,
-                                             ownerMTreePrfList=ownerMTreePrfList)
-                    self.accounts[i].ValuePrfBlockPair[j][1].add_prf_unit(prfUnit)
-                    self.accounts[i].ValuePrfBlockPair[j][2].append(copy.deepcopy(blockIndex))
-                    # 测试是否有重复值加入
-                    test = self.accounts[i].ValuePrfBlockPair[j][2]
-                    if len(test) > 2 and test[-1] == test[-2]:
-                        raise ValueError("发现VPB添加错误！！！！")
+        """
 
     def updateBloomPrf(self):
         txnAccNum = len(self.AccTxns) # 参与本轮交易的账户的数量
