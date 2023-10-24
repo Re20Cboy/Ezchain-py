@@ -1,5 +1,5 @@
 import copy
-
+import matplotlib.pyplot as plt
 import Block
 import Blockchain
 import Message
@@ -16,16 +16,19 @@ import unit
 class EZsimulate:
     def __init__(self):
         self.blockchain = None
-        self.mineTime = []
         self.nodeList = []
         self.hashPower = []
         self.network = Network.Network()
         self.avgTPS = 0
+        self.TPSList = [] # 记录每轮的TPS
+        self.TxnsNumList = [] # 记录每轮交易的总数
+        self.mineTimeList = [] # 记录两个区块间的间隔时间
         self.avgTxnDelay = 0
         self.hashDifficulty = HASH_DIFFICULTY
         self.nodeNum = NODE_NUM
         self.accounts = []
         self.AccTxns = [] #以账户为单位的交易集合
+        self.simulateRound = 0
 
     def random_generate_nodes(self, nodeNum = NODE_NUM):
         for i in range(nodeNum):
@@ -55,6 +58,7 @@ class EZsimulate:
             return allocations
 
         randomAccNum = random.randrange(ACCOUNT_NUM // 2, ACCOUNT_NUM)  # 随机生成参与交易的账户数
+        self.TxnsNumList.append(numTxns)
         accountTxns = []
         accountTxnsRecipientList = []
         allocations = distribute_transactions(numTxns, randomAccNum)
@@ -93,8 +97,7 @@ class EZsimulate:
         genesisMTree = unit.MerkleTree(encodedGAccTxns, isGenesisBlcok=True)
         mTreeRoot = genesisMTree.getRootHash()
         genesisBlock = Block.Block(index=blockIndex, mTreeRoot = mTreeRoot, miner = GENESIS_MINER_ID, prehash = preBlockHash)
-        # genesisBlockMsg = Message.BlockMsg(genesisBlock)
-        # genesisBlockBodyMsg = Message.BlockBodyMsg(genesisMTree, genesisAccTxns)
+
         # 将创世块加入区块链中
         self.blockchain = Blockchain.Blockchain(genesisBlock)
         # 生成每个创世块中的proof
@@ -120,20 +123,28 @@ class EZsimulate:
             selected_element = random.choices(elements, probabilities, k=1)[0]
             return selected_element
 
-        def brd_txn_prf_2_acc():
-            pass
-
         #随机winner的挖矿时间，并添加记录
         print('Begin mining...')
         mine_time_samples = np.random.geometric(self.hashDifficulty*self.hashPower[0], size=self.nodeNum)
-        winner_mine_time = min(mine_time_samples)
-        self.mineTime.append(winner_mine_time)
-        winner_mine_time = 1 # 测试阶段统一使用1s
-        time.sleep(winner_mine_time)
+        mine_result_time = [0]*self.nodeNum
+        if self.simulateRound == 1: # 第一轮模拟，node还没有广播和验证延迟
+            mine_result_time = mine_time_samples
+        else:
+            for index, item in enumerate(mine_time_samples, start=0):
+                mine_result_time[index] = item + self.nodeList[index].blockBrdCostedTime[-1] + self.nodeList[index].blockCheckCostedTime[-1]
+        winner_mine_time = min(mine_result_time)
+        self.mineTimeList.append(winner_mine_time)
+        # time.sleep(winner_mine_time)
         #随机模拟出挖矿赢家，并打包需要广播的交易和区块
         winner = select_element(self.nodeList, self.hashPower)
         winner.tmpBlockBodyMsg = blockBodyMsg
         winner.create_new_block()
+        # 添加winner的各项的指标时间
+        winner.blockBrdCostedTime.append(0)
+        winner.blockBodyBrdCostedTime.append(0)
+        winner.blockCheckCostedTime.append(0)
+        winner.blockBodyCheckCostedTime.append(0)
+
         print('Winner is ' + str(winner.id))
         #模拟信息的广播
         print('Begin broadcast msg...')
@@ -270,6 +281,29 @@ class EZsimulate:
         for acc in self.accounts:
             acc.clear_info()
 
+    def calculateRoundTPS(self):
+        thisRoundTime = self.mineTimeList[self.simulateRound-1]
+        thisRoundTxnNum = self.TxnsNumList[self.simulateRound-1]
+        self.TPSList.append(thisRoundTxnNum / thisRoundTime)
+
+    def calculateAvgTPS(self):
+        sumTxnNum = 0
+        for item in self.TxnsNumList:
+            sumTxnNum += item
+
+        sumTimeSum = 0
+        for item in self.mineTimeList:
+            sumTimeSum += item
+
+        self.avgTPS = sumTxnNum / sumTimeSum
+
+    def showPerformance(self):
+        # 绘制柱状图
+        plt.bar(range(len(self.TPSList)), self.TPSList)
+        # 添加平均值水平线
+        plt.axhline(y=self.avgTPS, color='r', linestyle='--')
+
+        plt.show()
 
 if __name__ == "__main__":
     #初始化设置
@@ -294,6 +328,7 @@ if __name__ == "__main__":
     EZsimulate.generate_GenesisBlock()
 
     for round in range(SIMULATE_ROUND):
+        EZsimulate.simulateRound += 1 # 模拟轮次+1
         # 账户节点随机生成交易（可能有一些账户没有交易，因为参加交易的账户的数量是随机的）
         EZsimulate.AccTxns, ACTxnsRecipientList = EZsimulate.random_generate_AccTxns()
         for i in range(len(EZsimulate.AccTxns)):
@@ -303,6 +338,8 @@ if __name__ == "__main__":
         blockBodyMsg = EZsimulate.generate_block_body()
         # 挖矿模拟
         EZsimulate.begin_mine(blockBodyMsg)
+        # 计算并更新上轮的TPS数据
+        EZsimulate.calculateRoundTPS()
         # sender将交易添加至自己的本地数据库中，并更新所有在持值的proof（V-P-B pair）
         EZsimulate.updateSenderVPBpair(blockBodyMsg.info)
         # 更新account的bloomPrf信息
@@ -314,3 +351,7 @@ if __name__ == "__main__":
 
     # 打印链
     EZsimulate.blockchain.print_chain()
+    # 计算平均TPS
+    EZsimulate.calculateAvgTPS()
+    # 打印性能结果
+    EZsimulate.showPerformance()

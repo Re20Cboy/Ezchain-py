@@ -5,12 +5,12 @@ import unit
 import hashlib
 
 class Block:
-    def __init__(self, index, mTreeRoot, miner, prehash, nonce = 0, bloomsize = 1024*1024, bloomhashcount = 5,  time = datetime.datetime.now()):
+    def __init__(self, index, mTreeRoot, miner, prehash, nonce = 0, bloomsize = 1024*1024, bloomhashcount = 5, time = datetime.datetime.now()):
         self.index = index
         self.nonce = nonce
         self.bloom = Bloom.BloomFilter(bloomsize, bloomhashcount)
         self.mTreeRoot = mTreeRoot
-        self.time = time #创建此区块时的时间戳
+        self.time = datetime.datetime.now() #创建此区块时的时间戳
         self.miner = miner # 这里的miner是miner的id
         self.preHash = prehash
         self.sig = unit.generate_signature(miner) #数字签名待实现

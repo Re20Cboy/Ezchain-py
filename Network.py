@@ -1,5 +1,7 @@
 import time
 import sys
+
+import Message
 from const import *
 import numpy as np
 import random
@@ -37,8 +39,8 @@ class Network:
                     if neighbor_time == None:
                         raise ValueError("neighbor_time未被定义！！！")
 
-                    checkFlag = nodeList[neighbor].receive_msg(msg)  # todo:待实现接收msg的处理逻辑
-                    if not checkFlag:
+                    runTime = nodeList[neighbor].receive_msg(msg) # runTime是node处理及验证各类（block及blockBody）消息的时间
+                    if runTime < 0:
                         return -1 #返回-1表示发现非法msg
 
                     if delay[neighbor] != 0:
@@ -48,9 +50,17 @@ class Network:
 
                     recursive_broadcast(neighbor, brd_time + neighbor_time)
 
-            return max(delay)
+            return delay, max(delay)
 
-        broadcast_time = recursive_broadcast(nodeID, 0)
+        delayList, broadcast_time = recursive_broadcast(nodeID, 0)
+        if type(msg) == Message.BlockMsg:
+            for index, delay in enumerate(delayList, start=0):
+                if delay != 0:
+                    nodeList[index].blockBrdCostedTime.append(delay)
+        elif type(msg) == Message.BlockBodyMsg:
+            for index, delay in enumerate(delayList, start=0):
+                if delay != 0:
+                    nodeList[index].blockBodyBrdCostedTime.append(delay)
         return broadcast_time
 
     def p2p_broadcast(self, nodeID, msg, nodeList):

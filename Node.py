@@ -26,6 +26,10 @@ class Node:
         self.publicKeyPath = None
         self.addr = None
         self.generate_random_node() # 随机生成node的公私钥对及地址信息
+        self.blockBrdCostedTime = [] # 用于记录广播消耗的时间，最后用于计算tps、区块确认等数据
+        self.blockBodyBrdCostedTime = [] # 用于记录广播消耗的时间，最后用于计算tps、区块确认等数据
+        self.blockCheckCostedTime = []  # 用于记录验证消耗的时间，最后用于计算tps、区块确认等数据
+        self.blockBodyCheckCostedTime = []  # 用于记录验证消耗的时间，最后用于计算tps、区块确认等数据
 
     def generate_random_node(self): # 随机生成node的公钥、私钥及地址信息
         # 生成随机地址
@@ -143,22 +147,28 @@ class Node:
         pass
 
     def receive_msg(self, msg):
+        run_time = -1
         # 接收其他节点发送的区块
         if type(msg) == Message.BlockMsg:
             # 验证block的数据合规性:
             # 1. 数字签名验证； 2. Nonce验证； 3. 数据格式验证 ###注意此处不需要对bloom进行验证，直接使用bloom来进行交易打包和挖掘新块即可。
             # 此过程几乎不耗时
-
+            check_block_start_time = time.time()
             # 1. 数字签名验证；
             uncheckedBlock = msg.info
             uncheckedSig = uncheckedBlock.sig
             loadPKPath = NODE_PUBLIC_KEY_PATH + "public_key_node_"+str(uncheckedBlock.miner)+".pem"
             if not self.check_block_sig(block=uncheckedBlock, signature=uncheckedSig, load_public_key_path=loadPKPath):
                 raise ValueError("区块签名检测错误！")
-
+            # todo: 2. Nonce验证； 3. 数据格式验证
+            # todo: 待完成
             # 将此块添加到本地区块链中
             self.blockchain.add_block(msg.info)
-            pass
+            # 记录程序结束时间
+            check_block_end_time = time.time()
+            # 计算程序运行时间
+            run_time = check_block_end_time - check_block_start_time
+            self.blockCheckCostedTime.append(run_time)
 
         elif type(msg) == Message.BlockBodyMsg:
             # 验证block body的数据合规性
@@ -194,11 +204,12 @@ class Node:
             checkTree_end_time = time.time()
             # 计算程序运行时间
             run_time = checkTree_end_time - checkTree_start_time
-            #print(run_time)
-        else:
-            pass
+            self.blockBodyCheckCostedTime.append(run_time)
 
-        return True
+        else:
+            raise ValueError("接收到的Msg类型未知，固错误！")
+        return run_time
+
     def broadcast_block(self, block):
         # 将新生成的区块广播给相邻节点
         pass

@@ -8,7 +8,7 @@ ACCOUNT_NUM = 20 #模拟账户数量
 
 PICK_TXNS_NUM = int(ACCOUNT_NUM*ACCOUNT_NUM / 2) #一次打包的交易的数量，理论上不应当超过 ACCOUNT_NUM^2 / 2 （/2是因为随机时最少有ACCOUNT_NUM/ 2个账户参与交易）
 
-SIMULATE_ROUND = 5 # 挖矿轮数
+SIMULATE_ROUND = 10 # 挖矿轮数
 
 BANDWIDTH = 1024 * 1024 * 1 #网络带宽
 HASH_DIFFICULTY = 0.00001 #挖矿难度，即，一次hash运算挖矿成功的概率

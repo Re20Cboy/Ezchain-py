@@ -1,4 +1,5 @@
 import Block
+import hashlib
 
 class Blockchain:
     def __init__(self, GenesisBlock = None):
@@ -30,7 +31,10 @@ class Blockchain:
             print(f"Block {block.index}")
             print(f"Timestamp: {block.time}")
             print(f"Miner: {block.miner}")
-            print(f"Previous Hash: {str(block.preHash)}")
+            if block.index != 0:
+                print(f"Previous Hash: {block.preHash.hexdigest()}")
+            else:
+                print(f"Previous Hash: {block.preHash}")
             print(f"Merkle Tree Root: {block.mTreeRoot}")
             print(f"Nonce: {block.nonce}")
             print(f"Bloom Filter Size: {len(block.bloom)}")
