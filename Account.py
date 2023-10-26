@@ -26,7 +26,8 @@ class Account:
         self.balance = 0 # 统计账户Value计算余额
         self.costedValuesAndRecipes = [] # 用于记录本轮已花销的Values，type为[(value, 新的owner即交易的接收者), (..., ...), ...]
         self.recipientList = []
-        self.verifyCostList = [] # 用于记录验证一笔交易的各项消耗值（证明容量大小、验证时间），数据结构：(PrfSize, VerTime)
+        self.verifyTimeCostList = [] # 用于记录验证一笔交易的各项消耗值（证明容量大小）
+        self.verifyStorageCostList = [] # 用于记录验证一笔交易的各项消耗值（验证时间），单位为bit
         self.acc2nodeDelay = [] # 记录acc讲accTxn传递到交易池的延迟
 
     def clear_info(self):
@@ -367,7 +368,8 @@ class Account:
         check_end_time = time.time()
         # 计算程序运行时间
         VerTime = check_end_time - check_start_time
-        self.verifyCostList.append((PrfSize, VerTime))
+        self.verifyTimeCostList.append(VerTime)
+        self.verifyStorageCostList.append(PrfSize)
 
         return True
 

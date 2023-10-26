@@ -143,8 +143,11 @@ class EZsimulate:
                 raise ValueError("len(mine_time_samples) > len(self.nodeList)")
             new_mine_result_time = [0]*self.nodeNum
             for index, item in enumerate(mine_time_samples, start=0):
-                new_mine_result_time[index] = item + self.nodeList[index].blockBrdCostedTime[-1] + self.nodeList[index].blockCheckCostedTime[-1]
-            mine_result_time = new_mine_result_time
+                if len(self.nodeList[index].blockBrdCostedTime) > 0 and len(self.nodeList[index].blockCheckCostedTime) > 0:
+                    new_mine_result_time[index] = item + self.nodeList[index].blockBrdCostedTime[-1] + self.nodeList[index].blockCheckCostedTime[-1]
+                else:
+                    new_mine_result_time[index] = item
+                mine_result_time = new_mine_result_time
         winner_mine_time = min(mine_result_time)
         self.mineTimeList.append(winner_mine_time)
         # time.sleep(winner_mine_time)
@@ -355,6 +358,8 @@ class EZsimulate:
         ax1.legend(['Avg', 'TPS'])
         # 显示网格线
         ax1.grid(True)
+        # 保存图像到本地文件
+        plt.savefig('SimulateFig/TPS图像.png')
 
         # # # # # # # # 绘制挖矿耗时图像 # # # # # # # #
         # 创建一个Figure对象和一个子图
@@ -367,6 +372,8 @@ class EZsimulate:
         ax2.set_ylabel("mine time(s)")
         # 设置标题
         ax2.set_title("EZchain sys mine time")
+        # 保存图像到本地文件
+        plt.savefig('SimulateFig/挖矿耗时.png')
 
         # # # # # # # # 绘制Node存储成本图像 # # # # # # # #
         mineTimeList, storageCost = self.calculateNodeStorageCost()
@@ -378,6 +385,8 @@ class EZsimulate:
         ax3.set_ylabel('Con-node storage cost (MB)')
         # 设置标题
         ax3.set_title('Con-node storage cost and sys run time')
+        # 保存图像到本地文件
+        plt.savefig('SimulateFig/Node存储成本.png')
 
         # # # # # # # # 绘制Node验证成本图像 # # # # # # # #
         verifyCostList = self.calculateNodeVerifyCost()
@@ -391,40 +400,47 @@ class EZsimulate:
         ax4.set_ylabel("Con-node verify time(s)")
         # 设置标题
         ax4.set_title("Con-node verify time with sys run round")
+        # 保存图像到本地文件
+        plt.savefig('SimulateFig/Node验证成本.png')
 
-        # # # # # # # # 绘制account存储成本图像 # # # # # # # #
-        def divide_list_elements(lst, divisor, StoOrVer):
-            result = []
-            for num in lst:
-                result.append(num[StoOrVer] / divisor)
-            return result
-
-        viewNodeIndex = 0 # 以哪个账户为观察视角观察消耗的存储空间
-        accStorageCost = divide_list_elements([acc.verifyCostList[viewNodeIndex] for acc in self.accounts], 1048576, 0)
+        # # # # # # # # 绘制account验证存储成本图像 # # # # # # # #
+        def bitList2MBList(bitList):
+            MBList = []
+            for item in bitList:
+                MBList.append(item / 8388608) # 从bit转化为MB
+            return MBList
         # 创建一个Figure对象和一个子图
         fig5, ax5 = plt.subplots()
-        # 绘制柱状图
-        ax5.plot(range(len(accStorageCost)), accStorageCost)
+        # 抽取前五个acc作为观察对象，绘制其存验证储成本曲线
+        maxIndex = min(len(self.accounts), 5)
+        for index in range(maxIndex):
+            accStorageCostList = bitList2MBList(self.accounts[index].verifyStorageCostList) # 从bit转化为MB
+            ax5.plot(range(len(accStorageCostList)), accStorageCostList)
         # 设置x轴标签
         ax5.set_xlabel("reciped value number")
         # 设置y轴标签
         ax5.set_ylabel("Acc reciped VPB's size(MB)")
         # 设置标题
         ax5.set_title("Acc reciped VPB's size with reciped value number")
+        # 保存图像到本地文件
+        plt.savefig('SimulateFig/account验证存储成本.png')
 
-        # # # # # # # # 绘制account验证成本图像 # # # # # # # #
-        viewNodeIndex = 0  # 以哪个账户为观察视角观察消耗的验证时间
-        accVerCost = divide_list_elements([acc.verifyCostList[viewNodeIndex] for acc in self.accounts], 1, 1)
+        # # # # # # # # 绘制account验证时间成本图像 # # # # # # # #
         # 创建一个Figure对象和一个子图
         fig6, ax6 = plt.subplots()
-        # 绘制柱状图
-        ax6.plot(range(len(accVerCost)), accVerCost)
+        # 抽取前五个acc作为观察对象，绘制其验证时间成本曲线
+        maxIndex = min(len(self.accounts), 5)
+        for index in range(maxIndex):
+            accVerTimeCostList = self.accounts[index].verifyTimeCostList
+            ax6.plot(range(len(accVerTimeCostList)), accVerTimeCostList)
         # 设置x轴标签
         ax6.set_xlabel("reciped value number")
         # 设置y轴标签
         ax6.set_ylabel("account verify time(s)")
         # 设置标题
         ax6.set_title("account verify time with reciped value number")
+        # 保存图像到本地文件
+        plt.savefig('SimulateFig/account验证时间成本.png')
 
         # # # # # # # # 绘制每轮交易数和转移的值的数量图像 # # # # # # # #
         # 创建一个Figure对象和一个子图
@@ -436,12 +452,14 @@ class EZsimulate:
         # 设置y轴标签
         ax7.set_ylabel("txn or value num")
         # 添加图例
-        ax1.legend(['Txns Num', 'Values Num'])
+        ax7.legend(['Txns Num', 'Values Num'])
+        # 保存图像到本地文件
+        plt.savefig('SimulateFig/交易数和转移的值.png')
 
         # # # # # # # # 安全情况下账户对于交易的确认延迟图像 # # # # # # # #
         viewNodeIndex = 0  # 以哪个账户为观察视角观察消耗的验证时间
-        accVerCost = divide_list_elements([acc.verifyCostList[viewNodeIndex] for acc in self.accounts], 1, 1)
-        accStorageCost = 8 * divide_list_elements([acc.verifyCostList[viewNodeIndex] for acc in self.accounts], 1, 0)
+        accVerCost = self.accounts[viewNodeIndex].verifyTimeCostList
+        accStorageCost = self.accounts[viewNodeIndex].verifyStorageCostList
         acc2accDelayList = []
         for item in accStorageCost:
             acc2accDelayList.append(item / BANDWIDTH + ACC_ACC_DELAY)
@@ -458,7 +476,18 @@ class EZsimulate:
         ax8.set_xlabel("sys run round")
         # 设置y轴标签
         ax8.set_ylabel("acc[0]'s txn confirm time")
+        # 保存图像到本地文件
+        plt.savefig('SimulateFig/acc确认延迟.png')
 
+        # # # # # # # # 平均分叉率图像 # # # # # # # #
+        fig9, ax9 = plt.subplots()
+        # 添加水平线
+        forkRate = self.forkRate()
+        ax9.axhline(y=forkRate, color='r', linestyle='--')
+        # 添加文字标签
+        ax9.text(0.5, forkRate + 1, str(forkRate), color='r')
+        # 保存图像到本地文件
+        plt.savefig('SimulateFig/平均分叉率.png')
 
         # 显示图形
         plt.show()
@@ -483,7 +512,7 @@ class EZsimulate:
         for _ in range(FORK_SIMULATE_ROUND):
             forkCount += oneRoundForkSimulate()
         forkRate = forkCount / FORK_SIMULATE_ROUND
-        print("=========== forkRate = "+str(forkRate) + " ===========")
+        return forkRate
 
 if __name__ == "__main__":
     #初始化设置
