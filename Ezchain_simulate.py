@@ -12,6 +12,7 @@ import numpy as np
 import Account
 import Transaction
 import unit
+from pympler import asizeof
 
 class EZsimulate:
     def __init__(self):
@@ -29,6 +30,7 @@ class EZsimulate:
         self.accounts = []
         self.AccTxns = [] #以账户为单位的交易集合
         self.simulateRound = 0
+        self.transVNumList = [] # 记录每轮转移的值的数量
 
     def random_generate_nodes(self, nodeNum = NODE_NUM):
         for i in range(nodeNum):
@@ -58,10 +60,12 @@ class EZsimulate:
             return allocations
 
         randomAccNum = random.randrange(ACCOUNT_NUM // 2, ACCOUNT_NUM)  # 随机生成参与交易的账户数
+        #randomAccNum = random.randrange(ACCOUNT_NUM-1, ACCOUNT_NUM) # 随机生成参与交易的账户数
         self.TxnsNumList.append(numTxns)
         accountTxns = []
         accountTxnsRecipientList = []
         allocations = distribute_transactions(numTxns, randomAccNum)
+        thisRoundAllTransValueNum = 0 # 记录所有账户本轮动用的值的数量
         for i in range(randomAccNum): # 随机本轮发起交易的账户数量
             allocTxnsNum = allocations[i] # 读取本次要读取的交易数量
             randomRecipientsIndexList = random.sample(range(len(self.accounts)), allocTxnsNum) # 随机生成本轮账户i需要转发的对象账户的索引
@@ -71,9 +75,14 @@ class EZsimulate:
             for tmp in randomRecipientsIndexList:
                 randomRecipients.append(self.accounts[tmp])
             tmpAccTxn = self.accounts[i].random_generate_txns(randomRecipients)
+            # 添加每个账户本轮动用的值的数量
+            for txn in tmpAccTxn:
+                tmpVNum = len(txn.Value)
+                thisRoundAllTransValueNum += tmpVNum
             accountTxns.append(Transaction.AccountTxns(self.accounts[i].addr, i, tmpAccTxn))
             self.accounts[i].accTxnsIndex = i # 设置账户对于其提交交易在区块中位置的索引
             accountTxnsRecipientList.append(randomRecipientsIndexList)
+        self.transVNumList.append(thisRoundAllTransValueNum)
         return accountTxns, accountTxnsRecipientList
 
     def generate_GenesisBlock(self):
@@ -130,8 +139,12 @@ class EZsimulate:
         if self.simulateRound == 1: # 第一轮模拟，node还没有广播和验证延迟
             mine_result_time = mine_time_samples
         else:
+            if len(mine_time_samples) > len(self.nodeList):
+                raise ValueError("len(mine_time_samples) > len(self.nodeList)")
+            new_mine_result_time = [0]*self.nodeNum
             for index, item in enumerate(mine_time_samples, start=0):
-                mine_result_time[index] = item + self.nodeList[index].blockBrdCostedTime[-1] + self.nodeList[index].blockCheckCostedTime[-1]
+                new_mine_result_time[index] = item + self.nodeList[index].blockBrdCostedTime[-1] + self.nodeList[index].blockCheckCostedTime[-1]
+            mine_result_time = new_mine_result_time
         winner_mine_time = min(mine_result_time)
         self.mineTimeList.append(winner_mine_time)
         # time.sleep(winner_mine_time)
@@ -260,7 +273,9 @@ class EZsimulate:
             del_value_index = [] # 记录需要删除的value的index
             if type(acc.ValuePrfBlockPair) != list or acc.ValuePrfBlockPair == []:
                 raise ValueError("VPB类型或内容错误！")
-            for j, VPBpair in enumerate(acc.ValuePrfBlockPair,start=0):
+            if len(acc.ValuePrfBlockPair) < 1:
+                raise ValueError("len(acc.ValuePrfBlockPair) < 1")
+            for j, VPBpair in enumerate(acc.ValuePrfBlockPair, start=0):
                 latestOwner = VPBpair[1].prfList[-1].owner
                 if latestOwner != acc.addr: # owner不再是自己，则传输给新owner，并删除本地备份
                     # 根据新owner的地址找到新owner的id
@@ -270,6 +285,8 @@ class EZsimulate:
                     # 新owner需要检测此VPB的合法性
                     if self.accounts[accID].check_VPBpair(newVPBpair, acc.bloomPrf, self.blockchain):
                         self.accounts[accID].add_VPBpair(newVPBpair)
+                    else:
+                        raise ValueError("VPB检测错误！！！")
                     # acc删除本地VPB备份，不能直接删除，否则循环中已加载的value会出问题
                     del_value_index.append(j)
             # 将需要删除的位置按照降序排序，以免删除元素之后影响后续元素的索引
@@ -297,13 +314,176 @@ class EZsimulate:
 
         self.avgTPS = sumTxnNum / sumTimeSum
 
-    def showPerformance(self):
-        # 绘制柱状图
-        plt.bar(range(len(self.TPSList)), self.TPSList)
-        # 添加平均值水平线
-        plt.axhline(y=self.avgTPS, color='r', linestyle='--')
+    def calculateNodeStorageCost(self):
+        storageCost = []
+        currStorageCost = 0
+        for i in range(len(self.blockchain.chain)):
+            currStorageCost += asizeof.asizeof(self.blockchain.chain[i])/1048576
+            storageCost.append(currStorageCost)
+        currMineTime = 0
+        mineTimeList = [currMineTime]
+        for item in self.mineTimeList:
+            currMineTime += item
+            mineTimeList.append(currMineTime)
+        return mineTimeList, storageCost
 
+    def calculateNodeVerifyCost(self):
+        verifyCostList = []
+        for index in range(self.simulateRound):
+            avgOneRoundVerTime = 0  # 计算每轮挖矿中，所有Node的平均验证时长
+            for node in self.nodeList:
+                avgOneRoundVerTime += node.blockCheckCostedTime[index]
+            avgOneRoundVerTime = avgOneRoundVerTime / self.nodeNum
+            verifyCostList.append(avgOneRoundVerTime)
+        return verifyCostList
+
+    def showPerformance(self):
+        # # # # # # # # 绘制TPS图像 # # # # # # # #
+        # 创建一个Figure对象和一个子图
+        fig1, ax1 = plt.subplots()
+        # 绘制柱状图
+        ax1.bar(range(len(self.TPSList)), self.TPSList)
+        # 添加平均值水平线
+        ax1.axhline(y=self.avgTPS, color='r', linestyle='--')
+        # 设置x轴标签
+        ax1.set_xlabel("sys run round")
+        # 设置y轴标签
+        ax1.set_ylabel("TPS")
+        # 设置标题
+        ax1.set_title("run round and TPS")
+        # 添加图例
+        ax1.legend(['Avg', 'TPS'])
+        # 显示网格线
+        ax1.grid(True)
+
+        # # # # # # # # 绘制挖矿耗时图像 # # # # # # # #
+        # 创建一个Figure对象和一个子图
+        fig2, ax2 = plt.subplots()
+        # 绘制柱状图
+        ax2.bar(range(len(self.mineTimeList)), self.mineTimeList)
+        # 设置x轴标签
+        ax2.set_xlabel("block index")
+        # 设置y轴标签
+        ax2.set_ylabel("mine time(s)")
+        # 设置标题
+        ax2.set_title("EZchain sys mine time")
+
+        # # # # # # # # 绘制Node存储成本图像 # # # # # # # #
+        mineTimeList, storageCost = self.calculateNodeStorageCost()
+        # 创建一个Figure对象和一个子图
+        fig3, ax3 = plt.subplots()
+        ax3.plot(mineTimeList, storageCost)
+        # 设置横轴和纵轴的标签
+        ax3.set_xlabel('sys run time')
+        ax3.set_ylabel('Con-node storage cost (MB)')
+        # 设置标题
+        ax3.set_title('Con-node storage cost and sys run time')
+
+        # # # # # # # # 绘制Node验证成本图像 # # # # # # # #
+        verifyCostList = self.calculateNodeVerifyCost()
+        # 创建一个Figure对象和一个子图
+        fig4, ax4 = plt.subplots()
+        # 绘制柱状图
+        ax4.plot(range(len(verifyCostList)), verifyCostList)
+        # 设置x轴标签
+        ax4.set_xlabel("sys run round")
+        # 设置y轴标签
+        ax4.set_ylabel("Con-node verify time(s)")
+        # 设置标题
+        ax4.set_title("Con-node verify time with sys run round")
+
+        # # # # # # # # 绘制account存储成本图像 # # # # # # # #
+        def divide_list_elements(lst, divisor, StoOrVer):
+            result = []
+            for num in lst:
+                result.append(num[StoOrVer] / divisor)
+            return result
+
+        viewNodeIndex = 0 # 以哪个账户为观察视角观察消耗的存储空间
+        accStorageCost = divide_list_elements([acc.verifyCostList[viewNodeIndex] for acc in self.accounts], 1048576, 0)
+        # 创建一个Figure对象和一个子图
+        fig5, ax5 = plt.subplots()
+        # 绘制柱状图
+        ax5.plot(range(len(accStorageCost)), accStorageCost)
+        # 设置x轴标签
+        ax5.set_xlabel("reciped value number")
+        # 设置y轴标签
+        ax5.set_ylabel("Acc reciped VPB's size(MB)")
+        # 设置标题
+        ax5.set_title("Acc reciped VPB's size with reciped value number")
+
+        # # # # # # # # 绘制account验证成本图像 # # # # # # # #
+        viewNodeIndex = 0  # 以哪个账户为观察视角观察消耗的验证时间
+        accVerCost = divide_list_elements([acc.verifyCostList[viewNodeIndex] for acc in self.accounts], 1, 1)
+        # 创建一个Figure对象和一个子图
+        fig6, ax6 = plt.subplots()
+        # 绘制柱状图
+        ax6.plot(range(len(accVerCost)), accVerCost)
+        # 设置x轴标签
+        ax6.set_xlabel("reciped value number")
+        # 设置y轴标签
+        ax6.set_ylabel("account verify time(s)")
+        # 设置标题
+        ax6.set_title("account verify time with reciped value number")
+
+        # # # # # # # # 绘制每轮交易数和转移的值的数量图像 # # # # # # # #
+        # 创建一个Figure对象和一个子图
+        fig7, ax7 = plt.subplots()
+        ax7.plot(range(len(self.TxnsNumList)), self.TxnsNumList)
+        ax7.plot(range(len(self.transVNumList)), self.transVNumList)
+        # 设置x轴标签
+        ax7.set_xlabel("sys run round")
+        # 设置y轴标签
+        ax7.set_ylabel("txn or value num")
+        # 添加图例
+        ax1.legend(['Txns Num', 'Values Num'])
+
+        # # # # # # # # 安全情况下账户对于交易的确认延迟图像 # # # # # # # #
+        viewNodeIndex = 0  # 以哪个账户为观察视角观察消耗的验证时间
+        accVerCost = divide_list_elements([acc.verifyCostList[viewNodeIndex] for acc in self.accounts], 1, 1)
+        accStorageCost = 8 * divide_list_elements([acc.verifyCostList[viewNodeIndex] for acc in self.accounts], 1, 0)
+        acc2accDelayList = []
+        for item in accStorageCost:
+            acc2accDelayList.append(item / BANDWIDTH + ACC_ACC_DELAY)
+        acc2nodeDelayList = self.accounts[viewNodeIndex].acc2nodeDelay
+        minIndex = min(len(acc2nodeDelayList), len(self.mineTimeList), len(acc2accDelayList), len(accVerCost))
+        confirmTime = []
+        for index in range(minIndex):
+            tmpTime = acc2nodeDelayList[index] + self.mineTimeList[index] + acc2accDelayList[index] + accVerCost[index]
+            confirmTime.append(tmpTime)
+        # 创建一个Figure对象和一个子图
+        fig8, ax8 = plt.subplots()
+        ax8.plot(range(len(confirmTime)), confirmTime)
+        # 设置x轴标签
+        ax8.set_xlabel("sys run round")
+        # 设置y轴标签
+        ax8.set_ylabel("acc[0]'s txn confirm time")
+
+
+        # 显示图形
         plt.show()
+
+    def forkRate(self): # 模拟计算当前情况下的链分叉率
+        def oneRoundForkSimulate():
+            mine_time_samples = np.random.geometric(self.hashDifficulty * self.hashPower[0], size=self.nodeNum)
+            # 提取最小值和第二小的值
+            sorted_samples = np.sort(mine_time_samples)  # 对数组进行排序
+            min_value = sorted_samples[0]  # 最小值
+            second_min_value = sorted_samples[1]  # 第二小的值
+            # 设置延迟网络矩阵
+            array = np.array([random.randint(1, 1000) for _ in range(self.nodeNum)])
+            delay_matrix = array / 1000  # 单位换算为s
+            maxTransDelay = max(delay_matrix)
+            if min_value + maxTransDelay > second_min_value:
+                return 1
+            else:
+                return 0
+
+        forkCount = 0
+        for _ in range(FORK_SIMULATE_ROUND):
+            forkCount += oneRoundForkSimulate()
+        forkRate = forkCount / FORK_SIMULATE_ROUND
+        print("=========== forkRate = "+str(forkRate) + " ===========")
 
 if __name__ == "__main__":
     #初始化设置
@@ -355,3 +535,5 @@ if __name__ == "__main__":
     EZsimulate.calculateAvgTPS()
     # 打印性能结果
     EZsimulate.showPerformance()
+    # 模拟当前的分叉率
+    EZsimulate.forkRate()

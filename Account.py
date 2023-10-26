@@ -9,8 +9,8 @@ import hashlib
 import string
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
+from pympler import asizeof
+import time
 
 class Account:
     def __init__(self, ID):
@@ -26,6 +26,8 @@ class Account:
         self.balance = 0 # 统计账户Value计算余额
         self.costedValuesAndRecipes = [] # 用于记录本轮已花销的Values，type为[(value, 新的owner即交易的接收者), (..., ...), ...]
         self.recipientList = []
+        self.verifyCostList = [] # 用于记录验证一笔交易的各项消耗值（证明容量大小、验证时间），数据结构：(PrfSize, VerTime)
+        self.acc2nodeDelay = [] # 记录acc讲accTxn传递到交易池的延迟
 
     def clear_info(self):
         self.accTxns = []
@@ -194,6 +196,7 @@ class Account:
                 accTxns.append(changeTxn2Recipient)
 
         self.accTxns = accTxns
+        self.acc2nodeDelay.append(asizeof.asizeof(accTxns) * 8 / BANDWIDTH + NODE_ACCOUNT_DELAY)
         return accTxns
 
     def receipt_txn_and_prf(self):
@@ -205,8 +208,11 @@ class Account:
             self.bloomPrf.append([copy.deepcopy(txnAccList), copy.deepcopy(blockIndex)]) # 布隆证明 = [此布隆过滤器中所有账户的地址，此布隆隶属的区块号]
 
     def check_VPBpair(self, VPBpair, bloomPrf, blockchain):
+        # 统计验证消耗
+        PrfSize = (asizeof.asizeof(VPBpair) + asizeof.asizeof(bloomPrf)) * 8 # *8转换为以bit为单位
+        # 记录程序开始时间
+        check_start_time = time.time()
         def hash(val):
-            # return hashlib.sha256(val.encode("utf-8")).hexdigest()
             if type(val) == str:
                 return hashlib.sha256(val.encode("utf-8")).hexdigest()
             else:
@@ -357,11 +363,16 @@ class Account:
                     pass
             oldEpochFlag = epochChangeList[index]
 
+        # 记录程序结束时间
+        check_end_time = time.time()
+        # 计算程序运行时间
+        VerTime = check_end_time - check_start_time
+        self.verifyCostList.append((PrfSize, VerTime))
+
         return True
 
 
     def generate_txn_prf_when_use(self, begin_index, end_index): # begin_index, end_index分别表示此txn在本账户手中开始的区块号和结束的区块号
-        # todo: 根据交易、区块等input，生成目标交易的proof。
         # proof = 原证明 + 新生成的证明（在此account时期内的证明）
         # proof单元的数据结构：（区块号，mTree证明）
         # 生成new proof（在此account时期内的证明）

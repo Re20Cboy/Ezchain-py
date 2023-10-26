@@ -147,7 +147,6 @@ class Node:
         pass
 
     def receive_msg(self, msg):
-        run_time = -1
         # 接收其他节点发送的区块
         if type(msg) == Message.BlockMsg:
             # 验证block的数据合规性:
