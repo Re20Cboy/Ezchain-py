@@ -16,8 +16,10 @@ class Account:
     def __init__(self, ID):
         self.addr = None
         self.id = ID
-        self.privateKeyPath = None
-        self.publicKeyPath = None
+        self.privateKeyPath = None # 存储私钥的地址
+        self.publicKeyPath = None # 存储公钥的地址
+        self.privateKey = None  # 私钥
+        self.publicKey = None  # 公钥
         self.ValuePrfBlockPair = [] # 当前账户拥有的值和对应的证据、区块号，以及所在list的编号对
         # self.prfChain = [] # 此账户所有证明的集合，即，公链上所有和本账户相关的prf集合
         self.bloomPrf = [] # 被bloom过滤器“误伤”时，提供证据（哪些账户可以生成此bloom）表明自己的“清白”。
@@ -83,19 +85,21 @@ class Account:
         publicPath = ACCOUNT_PUBLIC_KEY_PATH + "public_key_node_"+str(self.id)+".pem"
         self.privateKeyPath = privatePath
         self.publicKeyPath = publicPath
-        # 保存私钥到文件（请谨慎操作，不要轻易泄露私钥）
-        with open(privatePath, "wb") as f:
-            f.write(private_key.private_bytes(
+        self.privateKey = private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.PKCS8,
                 encryption_algorithm=serialization.NoEncryption()
-            ))
-        # 保存公钥到文件（公钥可以公开分发给需要验证方）
-        with open(publicPath, "wb") as f:
-            f.write(public_key.public_bytes(
+            )
+        self.publicKey = public_key.public_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
-            ))
+            )
+        # 保存私钥到文件（请谨慎操作，不要轻易泄露私钥）
+        with open(privatePath, "wb") as f:
+            f.write(self.privateKey)
+        # 保存公钥到文件（公钥可以公开分发给需要验证方）
+        with open(publicPath, "wb") as f:
+            f.write(self.publicKey)
 
     def random_generate_txns(self, randomRecipients):
         def pick_values_and_generate_txns(V, tmpSender, tmpRecipient, tmpNonce, tmpTxnHash, tmpTime): # V为int，是要挑拣的值的总量
@@ -132,11 +136,11 @@ class Account:
                 txn_2_sender = Transaction.Transaction(sender=tmpSender, recipient=tmpSender,
                                                  nonce=tmpNonce, signature=None, value=[V2],
                                                  tx_hash=tmpTxnHash, time=tmpTime)
-                txn_2_sender.sig_txn(self.privateKeyPath)
+                txn_2_sender.sig_txn(self.privateKey)
                 txn_2_recipient = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                  nonce=tmpNonce, signature=None, value=[V1],
                                                  tx_hash=tmpTxnHash, time=tmpTime)
-                txn_2_recipient.sig_txn(self.privateKeyPath)
+                txn_2_recipient.sig_txn(self.privateKey)
                 self.costedValuesAndRecipes.append((V1, tmpRecipient))
             else:
                 changeValueIndex = -1
@@ -171,7 +175,7 @@ class Account:
                 tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                  nonce=tmpNonce, signature=None, value=tmpValues,
                                                  tx_hash=tmpTxnHash, time=tmpTime)
-                tmpTxn.sig_txn(load_private_key_path=self.privateKeyPath)
+                tmpTxn.sig_txn(load_private_key=self.privateKey)
                 accTxns.append(tmpTxn)
             else: # 需要找零
                 tmpValues = []
@@ -184,7 +188,7 @@ class Account:
                     tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                      nonce=tmpNonce, signature=None, value=tmpValues,
                                                      tx_hash=tmpTxnHash, time=tmpTime)
-                    tmpTxn.sig_txn(load_private_key_path=self.privateKeyPath)
+                    tmpTxn.sig_txn(load_private_key=self.privateKey)
                     accTxns.append(tmpTxn)
 
                 tmpP = self.ValuePrfBlockPair[changeValueIndex][1]

@@ -22,8 +22,10 @@ class Node:
         #self.difficulty = 4  # PoW共识难度
         self.tmpBlockMsg = None # 临时存储的区块信息
         self.tmpBlockBodyMsg = None # 临时存储的区块详细信息（默克尔树格式）
-        self.privateKeyPath = None
-        self.publicKeyPath = None
+        self.privateKeyPath = None # 存储私钥的地址
+        self.publicKeyPath = None # 存储公钥的地址
+        self.privateKey = None # 私钥
+        self.publicKey = None # 公钥
         self.addr = None
         self.generate_random_node() # 随机生成node的公私钥对及地址信息
         self.blockBrdCostedTime = [] # 用于记录广播消耗的时间，最后用于计算tps、区块确认等数据
@@ -43,31 +45,23 @@ class Node:
         publicPath = NODE_PUBLIC_KEY_PATH + "public_key_node_"+str(self.id)+".pem"
         self.privateKeyPath = privatePath
         self.publicKeyPath = publicPath
-        # 保存私钥到文件（请谨慎操作，不要轻易泄露私钥）
-        with open(privatePath, "wb") as f:
-            f.write(private_key.private_bytes(
+        # 生成私钥
+        self.privateKey = private_key.private_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PrivateFormat.PKCS8,
                 encryption_algorithm=serialization.NoEncryption()
-            ))
-        # 保存公钥到文件（公钥可以公开分发给需要验证方）
-        with open(publicPath, "wb") as f:
-            f.write(public_key.public_bytes(
+            )
+        # 生成公钥
+        self.publicKey = public_key.public_bytes(
                 encoding=serialization.Encoding.PEM,
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
-            ))
-    """
-        private_key = ec.generate_private_key(ec.SECP256K1())
-        self.privateKey = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.PKCS8,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        self.publicKey = private_key.public_key().public_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PublicFormat.SubjectPublicKeyInfo
-        )
-    """
+            )
+        # 保存私钥到文件（请谨慎操作，不要轻易泄露私钥）
+        with open(privatePath, "wb") as f:
+            f.write(self.privateKey)
+        # 保存公钥到文件（公钥可以公开分发给需要验证方）
+        with open(publicPath, "wb") as f:
+            f.write(self.publicKey)
 
     def random_set_neighbors(self, nodeNum = NODE_NUM): # nodeNum表示所有节点的数量
         def random_sampling(nodeNum):
@@ -83,8 +77,8 @@ class Node:
 
     def sig_block(self, block):
         # 从私钥路径加载私钥
-        with open(self.privateKeyPath, "rb") as key_file:
-            private_key = load_pem_private_key(key_file.read(), password=None)
+        # with open(self.privateKeyPath, "rb") as key_file:
+        private_key = load_pem_private_key(self.privateKey, password=None)
         # 使用SHA256哈希算法计算区块的哈希值
         block_hash = hashes.Hash(hashes.SHA256())
         block_hash.update(block.block2str().encode('utf-8'))
@@ -94,10 +88,10 @@ class Node:
         signature = private_key.sign(data=digest, signature_algorithm=signature_algorithm)
         return signature
 
-    def check_block_sig(self, block, signature, load_public_key_path):
+    def check_block_sig(self, block, signature, load_public_key):
         # 从公钥路径加载公钥
-        with open(load_public_key_path, "rb") as key_file:
-            public_key = load_pem_public_key(key_file.read())
+        # with open(load_public_key_path, "rb") as key_file:
+        public_key = load_pem_public_key(load_public_key)
         # 使用SHA256哈希算法计算区块的哈希值
         block_hash = hashes.Hash(hashes.SHA256())
         block_hash.update(block.block2str().encode('utf-8'))
@@ -146,7 +140,7 @@ class Node:
         # 将有效的区块添加到区块链中
         pass
 
-    def receive_msg(self, msg):
+    def receive_msg(self, msg, PKList, accPKList):
         # 接收其他节点发送的区块
         if type(msg) == Message.BlockMsg:
             # 验证block的数据合规性:
@@ -156,8 +150,9 @@ class Node:
             # 1. 数字签名验证；
             uncheckedBlock = msg.info
             uncheckedSig = uncheckedBlock.sig
-            loadPKPath = NODE_PUBLIC_KEY_PATH + "public_key_node_"+str(uncheckedBlock.miner)+".pem"
-            if not self.check_block_sig(block=uncheckedBlock, signature=uncheckedSig, load_public_key_path=loadPKPath):
+            # loadPKPath = NODE_PUBLIC_KEY_PATH + "public_key_node_"+str(uncheckedBlock.miner)+".pem"
+            minerPK = PKList[uncheckedBlock.miner] # 获取miner的公钥
+            if not self.check_block_sig(block=uncheckedBlock, signature=uncheckedSig, load_public_key=minerPK):
                 raise ValueError("区块签名检测错误！")
             # todo: 2. Nonce验证； 3. 数据格式验证
             # todo: 待完成
@@ -188,8 +183,9 @@ class Node:
                 tmpSender = accTxns.AccTxns[0].Sender
                 tmpSenderID = accTxns.SenderID
                 for txn in accTxns.AccTxns:
-                    load_public_key_path = ACCOUNT_PUBLIC_KEY_PATH+"public_key_node_"+str(tmpSenderID)+".pem"
-                    if not txn.check_txn_sig(load_public_key_path):
+                    #load_public_key_path = ACCOUNT_PUBLIC_KEY_PATH+"public_key_node_"+str(tmpSenderID)+".pem"
+                    load_public_key = accPKList[tmpSenderID]
+                    if not txn.check_txn_sig(load_public_key):
                         return False
                     if tmpSender is not txn.Sender:
                         return False

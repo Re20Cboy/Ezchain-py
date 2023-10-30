@@ -24,7 +24,7 @@ class Network:
         #time.sleep(delay_time)
         return delay_time
 
-    def calculate_broadcast_time(self, nodeID, msg, nodeList):
+    def calculate_broadcast_time(self, nodeID, msg, nodeList, PKList, accPKList):
         visited = set()
         delay = [0] * NODE_NUM
         visited.add(nodeID)
@@ -39,7 +39,7 @@ class Network:
                     if neighbor_time == None:
                         raise ValueError("neighbor_time未被定义！！！")
 
-                    runTime = nodeList[neighbor].receive_msg(msg) # runTime是node处理及验证各类（block及blockBody）消息的时间
+                    runTime = nodeList[neighbor].receive_msg(msg, PKList=PKList, accPKList=accPKList) # runTime是node处理及验证各类（block及blockBody）消息的时间
                     if runTime < 0:
                         return -1 #返回-1表示发现非法msg
 

@@ -13,6 +13,8 @@ import Account
 import Transaction
 import unit
 from pympler import asizeof
+import datetime #系统时间作为文件名，防止记录时同文件名覆盖
+import cProfile # 分析性能
 
 class EZsimulate:
     def __init__(self):
@@ -31,12 +33,16 @@ class EZsimulate:
         self.AccTxns = [] #以账户为单位的交易集合
         self.simulateRound = 0
         self.transVNumList = [] # 记录每轮转移的值的数量
+        self.accountsPublicKeyList = [] # 记录所有账户的公钥列表
+        self.NodesPublicKeyList = [] # 记录所有节点的公钥列表
 
     def random_generate_nodes(self, nodeNum = NODE_NUM):
         for i in range(nodeNum):
             tmpNode = Node.Node(id = i)
             self.nodeList.append(tmpNode)
             self.hashPower.append(HASH_POWER) #随机设置算力占比
+            # 将公钥添加进公钥列表
+            self.NodesPublicKeyList.append(tmpNode.publicKey)
         for i in range(nodeNum):
             self.nodeList[i].random_set_neighbors() #随机设置邻居
 
@@ -45,6 +51,8 @@ class EZsimulate:
             tmpAccount = Account.Account(ID=i)
             tmpAccount.generate_random_account()
             self.accounts.append(tmpAccount)
+            # 将公钥添加进公钥列表
+            self.accountsPublicKeyList.append(tmpAccount.publicKey)
 
     def init_network(self):
         #初始化延迟二维数组
@@ -60,7 +68,6 @@ class EZsimulate:
             return allocations
 
         randomAccNum = random.randrange(ACCOUNT_NUM // 2, ACCOUNT_NUM)  # 随机生成参与交易的账户数
-        #randomAccNum = random.randrange(ACCOUNT_NUM-1, ACCOUNT_NUM) # 随机生成参与交易的账户数
         self.TxnsNumList.append(numTxns)
         accountTxns = []
         accountTxnsRecipientList = []
@@ -164,14 +171,14 @@ class EZsimulate:
         print('Winner is ' + str(winner.id))
         #模拟信息的广播
         print('Begin broadcast msg...')
-        block_brd_delay = self.network.calculate_broadcast_time(nodeID=winner.id, msg=winner.tmpBlockMsg, nodeList=self.nodeList)
+        block_brd_delay = self.network.calculate_broadcast_time(nodeID=winner.id, msg=winner.tmpBlockMsg, nodeList=self.nodeList, PKList=self.NodesPublicKeyList, accPKList=self.accountsPublicKeyList)
         if block_brd_delay < 0:
             print('!!!!! Illegal msg !!!!!')
         else:
             print('Block broadcast cost ' + str(block_brd_delay) + 's')
             print('Add block to main chain...')
             self.blockchain.add_block(block=winner.tmpBlockMsg.info)
-            block_body_brd_delay = self.network.calculate_broadcast_time(nodeID=winner.id, msg=winner.tmpBlockBodyMsg, nodeList=self.nodeList)
+            block_body_brd_delay = self.network.calculate_broadcast_time(nodeID=winner.id, msg=winner.tmpBlockBodyMsg, nodeList=self.nodeList, PKList=self.NodesPublicKeyList, accPKList=self.accountsPublicKeyList)
             if block_body_brd_delay < 0:
                 print('!!!!! Illegal msg !!!!!')
             else:
@@ -220,39 +227,6 @@ class EZsimulate:
                     test = self.accounts[i].ValuePrfBlockPair[j][2]
                     if len(test) > 2 and test[-1] == test[-2]:
                         raise ValueError("发现VPB添加错误！！！！")
-        """
-            for txn in senderTxns:
-                # 交易会引起所有Value的prf的变化
-                recipient = txn.Recipient
-                # 此交易中所有存在VPB中的值（注意，有些可能不存在VPB中!!!!!）
-                VsinTxn = txn.Value
-                first_elements_list = [t[0] for t in self.accounts[i].ValuePrfBlockPair]
-                # todo:这里用交集 & 计算符号是错误的，因为这样是比对内存一致的value，在值转移（深拷贝）多次后，可能出现地址不统一的情况
-                # intersection = set(txnVsinVPB) & set(first_elements_list)
-                intersectionVlist = []
-                for value in VsinTxn:
-                    for valueHold in first_elements_list:
-                        if value.isSameValue(valueHold): # todo:这里使用isSameValue的判断逻辑是正确的嘛？
-                            intersectionVlist.append(value)
-
-                if intersectionVlist != []: # 若==，则说明此值不在VPB中，是被分裂的值（不应存在的值）
-                    # 找出此txn中所有值的在sender中的index
-                    index = self.accounts[i].find_VPBpair_via_V(intersectionVlist)
-                    unrecordedIndex = get_elements_not_in_B(A=index, B=costValueIndex)
-                    if unrecordedIndex != []:
-                        costValueIndex += unrecordedIndex
-                        # 为index中每个value添加新的prfUnit
-                        for item in unrecordedIndex:
-                            prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
-                                                    ownerMTreePrfList=ownerMTreePrfList)
-
-                            self.accounts[i].ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
-                            self.accounts[i].ValuePrfBlockPair[item][2].append(copy.deepcopy(blockIndex))
-                            # 测试是否有重复值加入
-                            test = self.accounts[i].ValuePrfBlockPair[item][2]
-                            if len(test)>2 and test[-1]==test[-2]:
-                                raise ValueError("发现VPB添加错误！！！！")
-        """
 
     def updateBloomPrf(self):
         txnAccNum = len(self.AccTxns) # 参与本轮交易的账户的数量
@@ -341,6 +315,8 @@ class EZsimulate:
         return verifyCostList
 
     def showPerformance(self):
+        current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")  # 获取当前时间
+        current_const = str(NODE_NUM)+'Nodes_'+str(ACCOUNT_NUM)+'Accs_'+str(SIMULATE_ROUND)+'Rounds'
         # # # # # # # # 绘制TPS图像 # # # # # # # #
         # 创建一个Figure对象和一个子图
         fig1, ax1 = plt.subplots()
@@ -359,7 +335,7 @@ class EZsimulate:
         # 显示网格线
         ax1.grid(True)
         # 保存图像到本地文件
-        plt.savefig('SimulateFig/TPS图像.png')
+        plt.savefig('SimulateFig/TPS图像_{}_{}.png'.format(current_time, current_const))
 
         # # # # # # # # 绘制挖矿耗时图像 # # # # # # # #
         # 创建一个Figure对象和一个子图
@@ -373,7 +349,7 @@ class EZsimulate:
         # 设置标题
         ax2.set_title("EZchain sys mine time")
         # 保存图像到本地文件
-        plt.savefig('SimulateFig/挖矿耗时.png')
+        plt.savefig('SimulateFig/挖矿耗时_{}_{}.png'.format(current_time, current_const))
 
         # # # # # # # # 绘制Node存储成本图像 # # # # # # # #
         mineTimeList, storageCost = self.calculateNodeStorageCost()
@@ -386,7 +362,7 @@ class EZsimulate:
         # 设置标题
         ax3.set_title('Con-node storage cost and sys run time')
         # 保存图像到本地文件
-        plt.savefig('SimulateFig/Node存储成本.png')
+        plt.savefig('SimulateFig/Node存储成本_{}_{}.png'.format(current_time, current_const))
 
         # # # # # # # # 绘制Node验证成本图像 # # # # # # # #
         verifyCostList = self.calculateNodeVerifyCost()
@@ -401,7 +377,7 @@ class EZsimulate:
         # 设置标题
         ax4.set_title("Con-node verify time with sys run round")
         # 保存图像到本地文件
-        plt.savefig('SimulateFig/Node验证成本.png')
+        plt.savefig('SimulateFig/Node验证成本_{}_{}.png'.format(current_time, current_const))
 
         # # # # # # # # 绘制account验证存储成本图像 # # # # # # # #
         def bitList2MBList(bitList):
@@ -423,7 +399,7 @@ class EZsimulate:
         # 设置标题
         ax5.set_title("Acc reciped VPB's size with reciped value number")
         # 保存图像到本地文件
-        plt.savefig('SimulateFig/account验证存储成本.png')
+        plt.savefig('SimulateFig/account验证存储成本_{}_{}.png'.format(current_time, current_const))
 
         # # # # # # # # 绘制account验证时间成本图像 # # # # # # # #
         # 创建一个Figure对象和一个子图
@@ -440,7 +416,7 @@ class EZsimulate:
         # 设置标题
         ax6.set_title("account verify time with reciped value number")
         # 保存图像到本地文件
-        plt.savefig('SimulateFig/account验证时间成本.png')
+        plt.savefig('SimulateFig/account验证时间成本_{}_{}.png'.format(current_time, current_const))
 
         # # # # # # # # 绘制每轮交易数和转移的值的数量图像 # # # # # # # #
         # 创建一个Figure对象和一个子图
@@ -454,7 +430,7 @@ class EZsimulate:
         # 添加图例
         ax7.legend(['Txns Num', 'Values Num'])
         # 保存图像到本地文件
-        plt.savefig('SimulateFig/交易数和转移的值.png')
+        plt.savefig('SimulateFig/交易数和转移的值_{}_{}.png'.format(current_time, current_const))
 
         # # # # # # # # 安全情况下账户对于交易的确认延迟图像 # # # # # # # #
         viewNodeIndex = 0  # 以哪个账户为观察视角观察消耗的验证时间
@@ -477,7 +453,7 @@ class EZsimulate:
         # 设置y轴标签
         ax8.set_ylabel("acc[0]'s txn confirm time")
         # 保存图像到本地文件
-        plt.savefig('SimulateFig/acc确认延迟.png')
+        plt.savefig('SimulateFig/acc确认延迟_{}_{}.png'.format(current_time, current_const))
 
         # # # # # # # # 平均分叉率图像 # # # # # # # #
         fig9, ax9 = plt.subplots()
@@ -487,7 +463,7 @@ class EZsimulate:
         # 添加文字标签
         ax9.text(0.5, forkRate + 1, str(forkRate), color='r')
         # 保存图像到本地文件
-        plt.savefig('SimulateFig/平均分叉率.png')
+        plt.savefig('SimulateFig/平均分叉率_{}_{}.png'.format(current_time, current_const))
 
         # 显示图形
         plt.show()
@@ -515,29 +491,8 @@ class EZsimulate:
         return forkRate
 
 if __name__ == "__main__":
-    #初始化设置
-    EZsimulate = EZsimulate()
-    print('blockchain:')
-    print(EZsimulate.blockchain)
-
-    EZsimulate.random_generate_nodes()
-    #print('nodes list:')
-    #print(EZsimulate.nodeList)
-    #print(EZsimulate.hashPower)
-
-    EZsimulate.random_generate_accounts()
-    #print('accounts:')
-
-    # 初始化p2p网络
-    EZsimulate.init_network()
-    print('network:')
-    print(EZsimulate.network.delay_matrix)
-
-    # 根据账户生成创世块（给每个账户分发token），并更新account本地的数据（V-P-B pair）
-    EZsimulate.generate_GenesisBlock()
-
-    for round in range(SIMULATE_ROUND):
-        EZsimulate.simulateRound += 1 # 模拟轮次+1
+    def oneRoundSimulate():
+        EZsimulate.simulateRound += 1  # 模拟轮次+1
         # 账户节点随机生成交易（可能有一些账户没有交易，因为参加交易的账户的数量是随机的）
         EZsimulate.AccTxns, ACTxnsRecipientList = EZsimulate.random_generate_AccTxns()
         for i in range(len(EZsimulate.AccTxns)):
@@ -557,6 +512,36 @@ if __name__ == "__main__":
         EZsimulate.sendPrfAndCheck(ACTxnsRecipientList)
         # 重置account中的信息
         EZsimulate.clearOldInfo()
+
+    #初始化设置
+    EZsimulate = EZsimulate()
+    print('blockchain:')
+    print(EZsimulate.blockchain)
+
+    EZsimulate.random_generate_nodes()
+
+    EZsimulate.random_generate_accounts()
+
+    # 初始化p2p网络
+    EZsimulate.init_network()
+    print('network:')
+    print(EZsimulate.network.delay_matrix)
+
+    # 根据账户生成创世块（给每个账户分发token），并更新account本地的数据（V-P-B pair）
+    EZsimulate.generate_GenesisBlock()
+
+    for round in range(SIMULATE_ROUND):
+        # 创建一个cProfile对象
+        profiler = cProfile.Profile()
+        # 启动性能分析器
+        profiler.enable()
+        # 调用要分析的函数
+        oneRoundSimulate()
+        # 停止性能分析器
+        profiler.disable()
+        # 打印性能分析结果
+        print("==========ROUND "+str(round)+"==========")
+        profiler.print_stats()
 
     # 打印链
     EZsimulate.blockchain.print_chain()

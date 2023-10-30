@@ -43,10 +43,10 @@ class Transaction:
         txn_str += f"Time: {self.Time}\n"
         return txn_str
 
-    def sig_txn(self, load_private_key_path):
+    def sig_txn(self, load_private_key):
         # 从私钥路径加载私钥
-        with open(load_private_key_path, "rb") as key_file:
-            private_key = load_pem_private_key(key_file.read(), password=None)
+        # with open(load_private_key_path, "rb") as key_file:
+        private_key = load_pem_private_key(load_private_key, password=None)
         # 使用SHA256哈希算法计算区块的哈希值
         block_hash = hashes.Hash(hashes.SHA256())
         block_hash.update(self.txn2str().encode('utf-8'))
@@ -56,10 +56,10 @@ class Transaction:
         signature = private_key.sign(data=digest, signature_algorithm=signature_algorithm)
         self.Signature = signature
 
-    def check_txn_sig(self, load_public_key_path):
+    def check_txn_sig(self, load_public_key):
         # 从公钥路径加载公钥
-        with open(load_public_key_path, "rb") as key_file:
-            public_key = load_pem_public_key(key_file.read())
+        # with open(load_public_key_path, "rb") as key_file:
+        public_key = load_pem_public_key(load_public_key)
         # 使用SHA256哈希算法计算区块的哈希值
         block_hash = hashes.Hash(hashes.SHA256())
         block_hash.update(self.txn2str().encode('utf-8'))
