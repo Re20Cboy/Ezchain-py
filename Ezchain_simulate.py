@@ -273,7 +273,7 @@ class EZsimulate:
 
     def clearOldInfo(self): # 进入下一轮挖矿时，清空一些不必要信息
         for acc in self.accounts:
-            acc.clear_info()
+            acc.clear_and_fresh_info()
 
     def calculateRoundTPS(self):
         thisRoundTime = self.mineTimeList[self.simulateRound-1]

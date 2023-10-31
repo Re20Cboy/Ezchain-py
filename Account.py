@@ -31,12 +31,15 @@ class Account:
         self.verifyTimeCostList = [] # 用于记录验证一笔交易的各项消耗值（证明容量大小）
         self.verifyStorageCostList = [] # 用于记录验证一笔交易的各项消耗值（验证时间），单位为bit
         self.acc2nodeDelay = [] # 记录acc讲accTxn传递到交易池的延迟
+        self.VPBCheckPoints = unit.checkedVPBList() # 记录已验证过的VPB的记录以减少account传输、存储、验证的成本
 
-    def clear_info(self):
+    def clear_and_fresh_info(self):
         self.accTxns = []
         self.accTxnsIndex = None
         self.costedValuesAndRecipes = []
         self.recipientList = []
+        # 根据本轮的VPBpairs对check points进行更新
+        self.VPBCheckPoints.addAndFreshCheckPoint(self.ValuePrfBlockPair)
 
     def add_VPBpair(self, item):
         self.ValuePrfBlockPair.append(item)
@@ -217,6 +220,7 @@ class Account:
         PrfSize = (asizeof.asizeof(VPBpair) + asizeof.asizeof(bloomPrf)) * 8 # *8转换为以bit为单位
         # 记录程序开始时间
         check_start_time = time.time()
+
         def hash(val):
             if type(val) == str:
                 return hashlib.sha256(val.encode("utf-8")).hexdigest()
@@ -376,7 +380,6 @@ class Account:
         self.verifyStorageCostList.append(PrfSize)
 
         return True
-
 
     def generate_txn_prf_when_use(self, begin_index, end_index): # begin_index, end_index分别表示此txn在本账户手中开始的区块号和结束的区块号
         # proof = 原证明 + 新生成的证明（在此account时期内的证明）
