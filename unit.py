@@ -40,7 +40,8 @@ class checkedVPBList:
                         VPBCP = [value, LatestOwner, blockIndex]
                         self.VPBCheckPoints.append(VPBCP)
                 # 更新VPB检查点信息
-                # 因为deleteList已经是递增序列了，因此可以直接删除
+                # 因为deleteList是递增序列，进行倒叙处理再进行删除处理
+                deleteList.reverse()
                 for index in deleteList:
                     del self.VPBCheckPoints[index]
                 for item in addList:
@@ -120,16 +121,16 @@ class Value:  # 针对VCB区块链的专门设计的值结构，总量2^259 = 16
             RestValues = []
             if tmp1 != 0:
                 if tmp2 != 0:
-                    tmpV1 = Value(decimal_beginIndex, tmp1)
-                    tmpV2 = Value(IntersectEnd + 1, tmp2)
+                    tmpV1 = Value(hex(decimal_beginIndex), tmp1)
+                    tmpV2 = Value(hex(IntersectEnd + 1), tmp2)
                     RestValues.append(tmpV1)
                     RestValues.append(tmpV2)
                 else:  # tmp1 != 0; tmp2 = 0
-                    tmpV1 = Value(decimal_beginIndex, tmp1)
+                    tmpV1 = Value(hex(decimal_beginIndex), tmp1)
                     RestValues.append(tmpV1)
             else:  # tmp1 = 0
                 if tmp2 != 0:
-                    tmpV2 = Value(IntersectEnd + 1, tmp2)
+                    tmpV2 = Value(hex(IntersectEnd + 1), tmp2)
                     RestValues.append(tmpV2)
                 else:  # tmp1 = 0; tmp2 = 0
                     pass
