@@ -185,7 +185,6 @@ class EZsimulate:
                 print('Block body broadcast cost ' + str(block_body_brd_delay) + 's')
 
     def updateSenderVPBpair(self, mTree):
-
         def get_elements_not_in_B(A, B): # 工具函数：返回在list A中但不在list B中的元素列表
             return [element for element in A if element not in B]
 

@@ -216,6 +216,23 @@ class Account:
             self.bloomPrf.append([copy.deepcopy(txnAccList), copy.deepcopy(blockIndex)]) # 布隆证明 = [此布隆过滤器中所有账户的地址，此布隆隶属的区块号]
 
     def check_VPBpair(self, VPBpair, bloomPrf, blockchain):
+        # 先检测check point，若有无需检测的vpb则直接跳过
+        ckList = self.VPBCheckPoints.findCKviaVPB(VPBpair)
+        passIndexList = None
+        if ckList != []: # 找到了对应的check point
+            ckOwner, ckBIndex = ckList[0]
+            flagIndex = None # CK记录到了VPB的哪一位
+            for index, item in enumerate(VPBpair[2],start=0):
+                if item == ckBIndex[-1]:
+                    flagIndex = index
+            if not flagIndex:
+                raise ValueError('VPB检测报错：此VPB与检查点记录有冲突！')
+            VPBOwner = VPBpair[1].prfList[flagIndex].owner
+            if VPBOwner != ckOwner:
+                raise ValueError('VPB检测报错：此VPB与检查点记录有冲突！')
+            passIndexList = range(flagIndex+1)
+
+
         # 统计验证消耗
         PrfSize = (asizeof.asizeof(VPBpair) + asizeof.asizeof(bloomPrf)) * 8 # *8转换为以bit为单位
         # 记录程序开始时间
@@ -227,7 +244,9 @@ class Account:
             else:
                 return hashlib.sha256(val).hexdigest()
 
-        # 1 检测数据类型：
+        ##############################
+        ######## 1 检测数据类型：########
+        ##############################
         if type(VPBpair[0]) != unit.Value or type(VPBpair[1]) != unit.Proof or type(VPBpair[2]) != list:
             print("VPB检测报错：数据结构错误")
             return False # 数据结构错误
@@ -240,7 +259,9 @@ class Account:
             print("VPB检测报错：证据和块索引非一一映射")
             return False # 证据和块索引非一一映射，固错误
 
-        # 2 检测value的结构合法性：
+        ##############################
+        ######## 2 检测value的结构合法性：
+        ##############################
         if not value.checkValue:
             print("VPB检测报错：value的结构合法性检测不通过")
             return False # value的结构合法性检测不通过
@@ -252,8 +273,13 @@ class Account:
         oneEpochBList = [] # 结构为：[list of block index]
         epochChangeList = [] # 记录epoch变化时的区块号
 
-        # 3 检验proof的正确性
+        ##############################
+        ######## 3 检验proof的正确性 ###
+        ##############################
         for index, prfUnit in enumerate(valuePrf, start=0):
+            if passIndexList:
+                if index in passIndexList:
+                    continue
             # 由于第一个prfUnit是创世块中的交易因此需要特殊的验证处理
             if index == 0: # 说明是创世块
                 recordOwner = prfUnit.owner
@@ -331,8 +357,9 @@ class Account:
                             if txn.Sender != txn.Recipient:
                                 print("VPB检测报错：此值不应当在此处被提前花费")
                                 return False # 此值不应当在此处被花费！
-
-        # 检测：每个epoch内的B和主链上的布隆过滤器的信息是相符的，即，epoch的owner没有在B上撒谎
+        ##############################
+        # 4 检测：每个epoch内的B和主链上的布隆过滤器的信息是相符的，即，epoch的owner没有在B上撒谎
+        ##############################
         if len(BList) != len(epochChangeList):
             print("VPB检测报错：len(BList) != len(epochChangeList)")
             return False

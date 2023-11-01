@@ -9,6 +9,20 @@ class checkedVPBList:
     def __init__(self):
         self.VPBCheckPoints = []
 
+    def findCKviaVPB(self, VPB): # 输入VPB，检测此VPB的V是否包含在checkpoint中，注意是“包含”关系
+        value = VPB[0]
+        returnList = []
+        if self.VPBCheckPoints != []:
+            for ck in self.VPBCheckPoints:
+                ckValue = ck[0]
+                ckOwner = ck[1]
+                ckBIndex = ck[2]
+                if ckValue.isInValue(value): # 判断value是否被包含在ckValue中
+                    returnList.append((ckOwner, ckBIndex))
+            if len(returnList) > 1:
+                print("FIND len(returnList) > 1 !!!")
+        return returnList
+
     def addAndFreshCheckPoint(self, VPBPairs):
         for VPB in VPBPairs:
             value = VPB[0]
@@ -20,11 +34,13 @@ class checkedVPBList:
             if self.VPBCheckPoints != []:
                 deleteList = []
                 addList = []
+                freshCKList = self.VPBCheckPoints
                 for index, VPBCP in enumerate(self.VPBCheckPoints, start=0):
                     V = VPBCP[0]
                     VOwner = VPBCP[1]
                     BIndex = VPBCP[2]
                     intersectValueReslut = V.getIntersectValue(value)
+
                     if intersectValueReslut != None:  # 新一轮持有的VPB中的value 和 原有的检查点（v） 有交集，需要处理后加入检查点
                         IntersectValue, RestValues = intersectValueReslut
                         newVPBCP = [IntersectValue, LatestOwner, blockIndex]
@@ -38,12 +54,13 @@ class checkedVPBList:
                         addList = RestVPBCPs
                     else:  # 新一轮持有的VPB中的value 和 原有的检查点（v） 无交集，则直接加入检查点
                         VPBCP = [value, LatestOwner, blockIndex]
-                        self.VPBCheckPoints.append(VPBCP)
+                        addList.append(VPBCP)
                 # 更新VPB检查点信息
                 # 因为deleteList是递增序列，进行倒叙处理再进行删除处理
-                deleteList.reverse()
-                for index in deleteList:
-                    del self.VPBCheckPoints[index]
+                if deleteList != []:
+                    deleteList.reverse()
+                    for index in deleteList:
+                        del self.VPBCheckPoints[index]
                 for item in addList:
                     self.VPBCheckPoints.append(item)
 
