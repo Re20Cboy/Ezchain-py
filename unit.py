@@ -12,13 +12,15 @@ class checkedVPBList:
     def findCKviaVPB(self, VPB): # 输入VPB，检测此VPB的V是否包含在checkpoint中，注意是“包含”关系
         value = VPB[0]
         returnList = []
+        indexList = []
         if self.VPBCheckPoints != []:
-            for ck in self.VPBCheckPoints:
+            for index, ck in enumerate(self.VPBCheckPoints):
                 ckValue = ck[0]
                 ckOwner = ck[1]
                 ckBIndex = ck[2]
                 if ckValue.isInValue(value): # 判断value是否被包含在ckValue中
                     returnList.append((ckOwner, ckBIndex))
+                    indexList.append(index)
             if len(returnList) > 1:
                 print("FIND len(returnList) > 1 !!!")
         return returnList
@@ -32,41 +34,35 @@ class checkedVPBList:
             LatestOwner = LatestPrfUnit.owner
 
             if self.VPBCheckPoints != []:
-                deleteList = []
-                addList = []
-                freshCKList = self.VPBCheckPoints
+                newVPBCP = [value, LatestOwner, blockIndex]
+                RestVPBCPs = None
+                delIndex = None
                 for index, VPBCP in enumerate(self.VPBCheckPoints, start=0):
                     V = VPBCP[0]
                     VOwner = VPBCP[1]
                     BIndex = VPBCP[2]
                     intersectValueReslut = V.getIntersectValue(value)
-
                     if intersectValueReslut != None:  # 新一轮持有的VPB中的value 和 原有的检查点（v） 有交集，需要处理后加入检查点
                         IntersectValue, RestValues = intersectValueReslut
-                        newVPBCP = [IntersectValue, LatestOwner, blockIndex]
+                        delIndex = index
                         RestVPBCPs = []
                         if RestValues != []:
                             for item in RestValues:
                                 tmpRestVPBCP = [item, VOwner, BIndex]
                                 RestVPBCPs.append(tmpRestVPBCP)
-                        RestVPBCPs.append(newVPBCP)
-                        deleteList.append(index)
-                        addList = RestVPBCPs
-                    else:  # 新一轮持有的VPB中的value 和 原有的检查点（v） 无交集，则直接加入检查点
-                        VPBCP = [value, LatestOwner, blockIndex]
-                        addList.append(VPBCP)
-                # 更新VPB检查点信息
-                # 因为deleteList是递增序列，进行倒叙处理再进行删除处理
-                if deleteList != []:
-                    deleteList.reverse()
-                    for index in deleteList:
-                        del self.VPBCheckPoints[index]
-                for item in addList:
-                    self.VPBCheckPoints.append(item)
+                        break
+                if RestVPBCPs: # 若RestVPBCPs = []则说明整个值都要更新，没有拆分剩下的部分
+                    self.VPBCheckPoints.append(copy.deepcopy(newVPBCP))
+                    for item in RestVPBCPs:
+                        self.VPBCheckPoints.append(copy.deepcopy(item))
+                    # 删除被拆分的check points
+                    del self.VPBCheckPoints[delIndex]
+                else: # 说明此值完全是“外来”，“第一次见到”。
+                    self.VPBCheckPoints.append(copy.deepcopy(newVPBCP))
 
             else:  # 添加第一批VPB检查点
                 VPBCP = [value, LatestOwner, blockIndex]
-                self.VPBCheckPoints.append(VPBCP)
+                self.VPBCheckPoints.append(copy.deepcopy(VPBCP))
 
 
 class ProofUnit:  # 一个值在一个区块内的证明
@@ -160,7 +156,11 @@ class Value:  # 针对VCB区块链的专门设计的值结构，总量2^259 = 16
         decimal_targetEnd = int(target.endIndex, 16)
         decimal_beginIndex = self.get_decimal_beginIndex()
         decimal_endIndex = self.get_decimal_endIndex()
-        return decimal_endIndex >= decimal_targetBegin and decimal_targetEnd >= decimal_beginIndex
+        if decimal_endIndex >= decimal_targetBegin:
+            if decimal_targetEnd >= decimal_beginIndex:
+                return True
+        return False
+        # return ((decimal_endIndex >= decimal_targetBegin) and (decimal_targetEnd >= decimal_beginIndex))
 
     def isInValue(self, target):  # target是Value类型, 判断target是否在本value内
         decimal_targetBegin = int(target.beginIndex, 16)

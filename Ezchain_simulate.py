@@ -67,7 +67,7 @@ class EZsimulate:
                 allocations[i] += 1
             return allocations
 
-        randomAccNum = random.randrange(ACCOUNT_NUM // 2, ACCOUNT_NUM)  # 随机生成参与交易的账户数
+        randomAccNum = random.randrange(ACCOUNT_NUM // 2 + 1, ACCOUNT_NUM)  # 随机生成参与交易的账户数
         self.TxnsNumList.append(numTxns)
         accountTxns = []
         accountTxnsRecipientList = []
