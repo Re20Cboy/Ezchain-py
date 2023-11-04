@@ -5,11 +5,12 @@ import copy
 import Transaction
 import re
 
+
 class checkedVPBList:
     def __init__(self):
         self.VPBCheckPoints = []
 
-    def findCKviaVPB(self, VPB): # 输入VPB，检测此VPB的V是否包含在checkpoint中，注意是“包含”关系
+    def findCKviaVPB(self, VPB):  # 输入VPB，检测此VPB的V是否包含在checkpoint中，注意是“包含”关系
         value = VPB[0]
         returnList = []
         indexList = []
@@ -18,7 +19,7 @@ class checkedVPBList:
                 ckValue = ck[0]
                 ckOwner = ck[1]
                 ckBIndex = ck[2]
-                if ckValue.isInValue(value): # 判断value是否被包含在ckValue中
+                if ckValue.isInValue(value):  # 判断value是否被包含在ckValue中
                     returnList.append((ckOwner, ckBIndex))
                     indexList.append(index)
             if len(returnList) > 1:
@@ -43,6 +44,8 @@ class checkedVPBList:
                     BIndex = VPBCP[2]
                     intersectValueReslut = V.getIntersectValue(value)
                     if intersectValueReslut != None:  # 新一轮持有的VPB中的value 和 原有的检查点（v） 有交集，需要处理后加入检查点
+                        if delIndex:
+                            raise ValueError('delIndex Err: 有多数个delIndex！')
                         IntersectValue, RestValues = intersectValueReslut
                         delIndex = index
                         RestVPBCPs = []
@@ -51,13 +54,13 @@ class checkedVPBList:
                                 tmpRestVPBCP = [item, VOwner, BIndex]
                                 RestVPBCPs.append(tmpRestVPBCP)
                         break
-                if RestVPBCPs: # 若RestVPBCPs = []则说明整个值都要更新，没有拆分剩下的部分
+                if RestVPBCPs != None:  # 若RestVPBCPs = []则说明整个值都要更新，没有拆分剩下的部分
                     self.VPBCheckPoints.append(copy.deepcopy(newVPBCP))
                     for item in RestVPBCPs:
                         self.VPBCheckPoints.append(copy.deepcopy(item))
                     # 删除被拆分的check points
                     del self.VPBCheckPoints[delIndex]
-                else: # 说明此值完全是“外来”，“第一次见到”。
+                else:  # 说明此值完全是“外来”，“第一次见到”。
                     self.VPBCheckPoints.append(copy.deepcopy(newVPBCP))
 
             else:  # 添加第一批VPB检查点

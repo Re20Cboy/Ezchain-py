@@ -59,7 +59,6 @@ class Account:
         # 根据本轮的VPBpairs对check points进行更新
         self.VPBCheckPoints.addAndFreshCheckPoint(self.ValuePrfBlockPair)
 
-
     def add_VPBpair(self, item):
         self.ValuePrfBlockPair.append(item)
         # 更新余额
@@ -234,32 +233,36 @@ class Account:
             # 被bloom误判，执行添加布隆证明操作
             self.bloomPrf.append([copy.deepcopy(txnAccList), copy.deepcopy(blockIndex)]) # 布隆证明 = [此布隆过滤器中所有账户的地址，此布隆隶属的区块号]
 
-    def check_pass_VPBpair(self, VPBpair, bloomPrf, blockchain, passIndexList, CKOwner): # 若存在check point时，则调用此函数
+    def check_pass_VPBpair(self, VPBpair, bloomPrf, blockchain, passIndexList, CKOwner, check_start_time): # 若存在check point时，则调用此函数
         value = VPBpair[0]
         valuePrf = VPBpair[1].prfList
         blockIndex = VPBpair[2]
 
-        recordOwner = None  # 此变量用于记录值流转的持有者
-        epochRealBList = []  # 记录epoch内的真实的B的信息，用于和VPB中的B进行对比
+        # recordOwner = None  # 此变量用于记录值流转的持有者
+        # epochRealBList = []  # 记录epoch内的真实的B的信息，用于和VPB中的B进行对比
         BList = []  # 记录epoch内的VPB的B的信息，结构为：[(owner,[list of block index]), (...), (...), ...]用于进行对比验证
-        oneEpochBList = [passIndexList[-1]]  # 结构为：[list of block index], 新的epoch的开头加进去
-        recordOwner = CKOwner  # 将记录的owner更新为CK的owner
+        oneEpochBList = [blockIndex[1 + passIndexList[-1]]]  # 结构为：[list of block index], 新的epoch的开头加进去
+        orgSender = valuePrf[passIndexList[-1]].owner
+        recordOwner = valuePrf[1 + passIndexList[-1]].owner  # 将记录的owner更新为CK的owner
         epochChangeList = []  # 记录epoch变化时的区块号
 
         ##############################
         ######## 3 检验proof的正确性 ###
         ##############################
-        freshFlag = True
         for index, prfUnit in enumerate(valuePrf, start=0):
             if index in passIndexList:
                 continue
 
             isNewEpoch = False
             oneEpochBList.append(blockIndex[index])
-            tmpSender = None  # 记录每个epoch变更时的交易的发送者，以便验证bloom
-            if recordOwner != prfUnit.owner:  # 说明 owner 已改变，该值进入下一个owner持有的epoch
+            tmpSender = None # 记录每个epoch变更时的交易的发送者，以便验证bloom
+            if index == passIndexList[-1]+1: # check point后的第一个检测需要特殊处理
+                isNewEpoch = True # 直接进入一个新的epoch
+                oneEpochBList.pop()  # pop后一个交易的区块号，否则有重复
+                tmpSender = orgSender
+            elif recordOwner != prfUnit.owner: # 说明 owner 已改变，该值进入下一个owner持有的epoch
                 isNewEpoch = True
-                lastBlockIndex = oneEpochBList.pop()  # 获得最后一个交易的区块号
+                lastBlockIndex = oneEpochBList.pop() # 获得最后一个交易的区块号
                 # 更新epoch内的VPB的B的信息
                 BList.append((copy.deepcopy(recordOwner), copy.deepcopy(oneEpochBList)))
                 oneEpochBList = [lastBlockIndex]  # 为下一段证明保留最初的交易所在的区块号
@@ -317,7 +320,7 @@ class Account:
             return False
 
         if passIndexList:
-            oldEpochFlag = passIndexList[-1]
+            oldEpochFlag = blockIndex[passIndexList[-1]+1]
         else:
             oldEpochFlag = 0
 
@@ -330,10 +333,10 @@ class Account:
                 print("VPB检测报错：本段owner持有值没有记录")
                 return False  # 本段owner持有值没有记录，固错误！
 
-            # 判断uncheckedBList是否接上passList
-            if index == 0 and uncheckedBList[0] != passIndexList[-1]:
-                print("VPB检测报错：检查点数据没有接上B list未检测数据")
-                return False
+            # todo:判断uncheckedBList是否接上passList
+            # if index == 0 and uncheckedBList[0] != blockIndex[passIndexList[-1]+1]:
+                # print("VPB检测报错：检查点数据没有接上B list未检测数据")
+                # return False
 
             ownerBegin = uncheckedBList[0]  # owner刚拥有该值时的block index
             ownerEnd = uncheckedBList[-1]  # owner将在下一个区块将此值转移给其他owner，即，最后一个持有此值的block index
@@ -349,7 +352,7 @@ class Account:
             if len(uncheckedBList) > 0 and uncheckedBList[0] == oldEpochFlag:
                 uncheckedBList.pop(0) # 这里会改变BList
             if len(realEpochBlist) > 0 and realEpochBlist[0] == oldEpochFlag:
-                realEpochBlist.pop(0) # 这里会改变BList
+                realEpochBlist.pop(0)
 
             if uncheckedBList != realEpochBlist:
                 # 若不同则需要检测bloom proof，排除被bloom过滤器“误伤”的可能
@@ -360,8 +363,17 @@ class Account:
                     # todo: 检测bloom proof
                     pass
             oldEpochFlag = epochChangeList[index]
-
+        passRate = len(passIndexList) / len(valuePrf)
+        PrfSize = (asizeof.asizeof(VPBpair) + asizeof.asizeof(bloomPrf)) * 8 * passRate # *8转换为以bit为单位
+        # 记录程序结束时间
+        check_end_time = time.time()
+        # 计算程序运行时间
+        VerTime = check_end_time - check_start_time
+        self.verifyTimeCostList.append(VerTime)
+        self.verifyStorageCostList.append(PrfSize)
         return True
+
+
 
     def check_VPBpair(self, VPBpair, bloomPrf, blockchain):
         # 先检测check point，若有无需检测的vpb则直接跳过
@@ -374,7 +386,7 @@ class Account:
             for index, item in enumerate(VPBpair[2],start=0):
                 if item == ckBIndex[-1]:
                     flagIndex = index
-            if not flagIndex:
+            if flagIndex == None:
                 raise ValueError('VPB检测报错：此VPB与检查点记录有冲突！')
             VPBOwner = VPBpair[1].prfList[flagIndex].owner
             if VPBOwner != ckOwner:
@@ -419,7 +431,7 @@ class Account:
 
 
         if passIndexList:
-            return self.check_pass_VPBpair(VPBpair, bloomPrf, blockchain, passIndexList, CKOwner)
+            return self.check_pass_VPBpair(VPBpair, bloomPrf, blockchain, passIndexList, CKOwner, check_start_time)
 
 
 

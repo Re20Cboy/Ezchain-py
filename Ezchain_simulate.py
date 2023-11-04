@@ -382,15 +382,31 @@ class EZsimulate:
         def bitList2MBList(bitList):
             MBList = []
             for item in bitList:
-                MBList.append(item / 8388608) # 从bit转化为MB
+                MBList.append(item / 8388608)  # 从bit转化为MB
             return MBList
+
         # 创建一个Figure对象和一个子图
         fig5, ax5 = plt.subplots()
         # 抽取前五个acc作为观察对象，绘制其存验证储成本曲线
         maxIndex = min(len(self.accounts), 5)
+        sumStorageCostList = []
+        avgStorageCostList = []
+        minIndex = None
         for index in range(maxIndex):
-            accStorageCostList = bitList2MBList(self.accounts[index].verifyStorageCostList) # 从bit转化为MB
+            accStorageCostList = bitList2MBList(self.accounts[index].verifyStorageCostList)  # 从bit转化为MB
             ax5.plot(range(len(accStorageCostList)), accStorageCostList)
+            if minIndex == None:
+                minIndex = len(accStorageCostList)
+            else:
+                minIndex = min(len(accStorageCostList), minIndex)
+            if index == 0:
+                sumStorageCostList = accStorageCostList
+            else:
+                for i in range(minIndex):
+                    sumStorageCostList[i] += accStorageCostList[i]
+        for i in sumStorageCostList:
+            avgStorageCostList.append(i / maxIndex)
+        ax5.plot(range(len(avgStorageCostList)), avgStorageCostList, color='black')
         # 设置x轴标签
         ax5.set_xlabel("reciped value number")
         # 设置y轴标签
