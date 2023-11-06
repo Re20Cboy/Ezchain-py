@@ -421,9 +421,24 @@ class EZsimulate:
         fig6, ax6 = plt.subplots()
         # 抽取前五个acc作为观察对象，绘制其验证时间成本曲线
         maxIndex = min(len(self.accounts), 5)
+        sumVerTimeList = []
+        avgVerTimeCostList = []
+        minIndex = None
         for index in range(maxIndex):
             accVerTimeCostList = self.accounts[index].verifyTimeCostList
             ax6.plot(range(len(accVerTimeCostList)), accVerTimeCostList)
+            if minIndex == None:
+                minIndex = len(accVerTimeCostList)
+            else:
+                minIndex = min(len(accVerTimeCostList), minIndex)
+            if index == 0:
+                sumVerTimeList = accVerTimeCostList
+            else:
+                for i in range(minIndex):
+                    sumVerTimeList[i] += accVerTimeCostList[i]
+        for i in sumVerTimeList:
+            avgVerTimeCostList.append(i / maxIndex)
+        ax6.plot(range(len(avgVerTimeCostList)), avgVerTimeCostList, color='black')
         # 设置x轴标签
         ax6.set_xlabel("reciped value number")
         # 设置y轴标签
@@ -479,6 +494,25 @@ class EZsimulate:
         ax9.text(0.5, forkRate + 1, str(forkRate), color='r')
         # 保存图像到本地文件
         plt.savefig('SimulateFig/平均分叉率_{}_{}.png'.format(current_time, current_const))
+
+        # # # # # # # # acc每轮存储成本图像 # # # # # # # #
+        fig10, ax10 = plt.subplots()
+        viewNodeIndex = 0  # 以哪个账户为观察视角观察消耗的验证时间
+        accRoundVPBCostList = self.accounts[viewNodeIndex].accRoundVPBCostList
+        accRoundCKCostList = self.accounts[viewNodeIndex].accRoundCKCostList
+        accRoundAllCostList = self.accounts[viewNodeIndex].accRoundAllCostList
+
+        ax10.plot(range(len(accRoundVPBCostList)), accRoundVPBCostList, color='r')
+        ax10.plot(range(len(accRoundCKCostList)), accRoundCKCostList, color='blue')
+        ax10.plot(range(len(accRoundAllCostList)), accRoundAllCostList, color='black')
+        # 设置x轴标签
+        ax10.set_xlabel("sys run round")
+        # 设置y轴标签
+        ax10.set_ylabel("Acc Storage Cost(MB)")
+        # 添加图例
+        ax10.legend(['VPB', 'CK', 'All'])
+        # 保存图像到本地文件
+        plt.savefig('SimulateFig/acc每轮存储成本_{}_{}.png'.format(current_time, current_const))
 
         # 显示图形
         plt.show()
@@ -546,17 +580,17 @@ if __name__ == "__main__":
     EZsimulate.generate_GenesisBlock()
 
     for round in range(SIMULATE_ROUND):
+        print("==========ROUND " + str(round) + "==========")
         # 创建一个cProfile对象
-        profiler = cProfile.Profile()
+        # profiler = cProfile.Profile()
         # 启动性能分析器
-        profiler.enable()
+        # profiler.enable()
         # 调用要分析的函数
         oneRoundSimulate()
         # 停止性能分析器
-        profiler.disable()
+        # profiler.disable()
         # 打印性能分析结果
-        print("==========ROUND "+str(round)+"==========")
-        profiler.print_stats()
+        # profiler.print_stats()
 
     # 打印链
     EZsimulate.blockchain.print_chain()

@@ -32,6 +32,9 @@ class Account:
         self.verifyStorageCostList = [] # 用于记录验证一笔交易的各项消耗值（验证时间），单位为bit
         self.acc2nodeDelay = [] # 记录acc讲accTxn传递到交易池的延迟
         self.VPBCheckPoints = unit.checkedVPBList() # 记录已验证过的VPB的记录以减少account传输、存储、验证的成本
+        self.accRoundVPBCostList = [] # 记录本节点每轮VPB的存储消耗
+        self.accRoundCKCostList = [] # 记录本节点每轮CK的存储消耗
+        self.accRoundAllCostList = [] # 记录本节点每轮VPB+CK(总的)存储消耗
 
     def test(self):
         test = copy.deepcopy(self.ValuePrfBlockPair)
@@ -55,9 +58,18 @@ class Account:
         self.costedValuesAndRecipes = []
         self.recipientList = []
         # 检测每轮的vpb中的v是否有重复
-        self.test()
+        # self.test()
         # 根据本轮的VPBpairs对check points进行更新
         self.VPBCheckPoints.addAndFreshCheckPoint(self.ValuePrfBlockPair)
+        # 更新acc的存储成本信息
+        self.freshStorageCost()
+
+    def freshStorageCost(self):
+        accRoundVPBCost = asizeof.asizeof(self.ValuePrfBlockPair) / 1048576
+        accRoundCKCost = asizeof.asizeof(self.VPBCheckPoints) / 1048576
+        self.accRoundVPBCostList.append(accRoundVPBCost) # 转化为MB
+        self.accRoundCKCostList.append(accRoundCKCost) # 转化为MB
+        self.accRoundAllCostList.append(accRoundVPBCost + accRoundCKCost) # 转化为MB
 
     def add_VPBpair(self, item):
         self.ValuePrfBlockPair.append(item)
@@ -363,7 +375,7 @@ class Account:
                     # todo: 检测bloom proof
                     pass
             oldEpochFlag = epochChangeList[index]
-        passRate = len(passIndexList) / len(valuePrf)
+        passRate = 1- (len(passIndexList) / len(valuePrf))
         PrfSize = (asizeof.asizeof(VPBpair) + asizeof.asizeof(bloomPrf)) * 8 * passRate # *8转换为以bit为单位
         # 记录程序结束时间
         check_end_time = time.time()

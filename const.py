@@ -6,7 +6,7 @@ SAMPLE_NEIGHBORS_NUM = 5 #随机链接的邻居节点的数量
 NODE_ACCOUNT_DELAY = 1.5 # node和acc之间的延迟
 ACC_ACC_DELAY = 1.5 # acc和acc之间的延迟
 
-NODE_NUM = 10 #模拟节点的数量
+NODE_NUM = 7 #模拟节点的数量
 ACCOUNT_NUM = 10 #模拟账户数量
 
 PICK_TXNS_NUM = int(ACCOUNT_NUM*ACCOUNT_NUM / 2) #一次打包的交易的数量，理论上不应当超过 ACCOUNT_NUM^2 / 2 （/2是因为随机时最少有ACCOUNT_NUM/ 2个账户参与交易）
