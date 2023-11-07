@@ -289,9 +289,10 @@ class Account:
             # 注意，这里的Encode()函数只对accTxns进行编码，因此可以设sender='sender'，senderID=None 结果不影响。
             uncheckedAccTxns = Transaction.AccountTxns(sender='sender', senderID=None, accTxns=ownerAccTxnsList)
             uncheckedMTreePrf = unit.MTreeProof(MTPrfList=ownerMTreePrfList)
-
+            uncheckedAccTxns.set_digest()
+            accTxnsDigest = uncheckedAccTxns.Digest
             # 检测：ownerMTreePrfList和主链此块中的root是相符的
-            if not uncheckedMTreePrf.checkPrf(accTxns=uncheckedAccTxns,
+            if not uncheckedMTreePrf.checkPrf(accTxnsDigest=accTxnsDigest,
                                             trueRoot=blockchain.chain[blockIndex[index]].get_mTreeRoot()):
                 print("VPB检测报错：默克尔树检测未通过")
                 return False  # 默克尔树检测未通过，固错误！
@@ -502,9 +503,10 @@ class Account:
                 # 注意，这里的Encode()函数只对accTxns进行编码，因此可以设sender='sender'，senderID=None 结果不影响。
                 uncheckedAccTxns = Transaction.AccountTxns(sender='sender', senderID=None, accTxns=ownerAccTxnsList)
                 uncheckedMTreePrf = unit.MTreeProof(MTPrfList=ownerMTreePrfList)
-
+                uncheckedAccTxns.set_digest()
+                accTxnsDigest = uncheckedAccTxns.Digest
                 # 检测：ownerMTreePrfList和主链此块中的root是相符的
-                if not uncheckedMTreePrf.checkPrf(accTxns=uncheckedAccTxns, trueRoot=blockchain.chain[blockIndex[index]].get_mTreeRoot()):
+                if not uncheckedMTreePrf.checkPrf(accTxnsDigest=accTxnsDigest, trueRoot=blockchain.chain[blockIndex[index]].get_mTreeRoot()):
                     print("VPB检测报错：默克尔树检测未通过")
                     return False # 默克尔树检测未通过，固错误！
 

@@ -35,6 +35,9 @@ class EZsimulate:
         self.transVNumList = [] # 记录每轮转移的值的数量
         self.accountsPublicKeyList = [] # 记录所有账户的公钥列表
         self.NodesPublicKeyList = [] # 记录所有节点的公钥列表
+        self.txnsPool = unit.txnsPool() # 用于存放本轮的所有交易
+        self.blockBrdTimeLst = [] # 记录区块的广播时间
+        self.blockBodyBrdTimeLst = [] # 记录区块体的广播时间
 
     def random_generate_nodes(self, nodeNum = NODE_NUM):
         for i in range(nodeNum):
@@ -128,10 +131,10 @@ class EZsimulate:
 
     def generate_block_body(self):
         new_block_body = Message.BlockBodyMsg()
-        encodeAccTxns = []
-        for item in self.AccTxns:
-            encodeAccTxns.append(item.Encode())
-        new_block_body.random_generate_mTree(encodeAccTxns, self.AccTxns)
+        DigestAccTxns = []
+        for item in self.txnsPool.pool:
+            DigestAccTxns.append(item[0])
+        new_block_body.random_generate_mTree(DigestAccTxns, self.txnsPool.pool)
         return new_block_body
 
     def begin_mine(self, blockBodyMsg): #模拟PoW算法
@@ -175,6 +178,7 @@ class EZsimulate:
         if block_brd_delay < 0:
             print('!!!!! Illegal msg !!!!!')
         else:
+            self.blockBrdTimeLst.append(block_brd_delay)
             print('Block broadcast cost ' + str(block_brd_delay) + 's')
             print('Add block to main chain...')
             self.blockchain.add_block(block=winner.tmpBlockMsg.info)
@@ -182,6 +186,7 @@ class EZsimulate:
             if block_body_brd_delay < 0:
                 print('!!!!! Illegal msg !!!!!')
             else:
+                self.blockBodyBrdTimeLst.append(block_body_brd_delay)
                 print('Block body broadcast cost ' + str(block_body_brd_delay) + 's')
 
     def updateSenderVPBpair(self, mTree):
@@ -271,6 +276,9 @@ class EZsimulate:
                 acc.delete_VPBpair(i)
 
     def clearOldInfo(self): # 进入下一轮挖矿时，清空一些不必要信息
+        # 清空交易池中的信息
+        self.txnsPool.clearPool()
+        # 清空account内的信息
         for acc in self.accounts:
             acc.clear_and_fresh_info()
 
@@ -514,6 +522,22 @@ class EZsimulate:
         # 保存图像到本地文件
         plt.savefig('SimulateFig/acc每轮存储成本_{}_{}.png'.format(current_time, current_const))
 
+        # # # # # # # # acc每轮存储成本图像 # # # # # # # #
+        fig11, ax11 = plt.subplots()
+        blockBrdTimeLst = self.blockBrdTimeLst
+        blockBodyBrdTimeLst = self.blockBodyBrdTimeLst
+
+        ax11.plot(range(len(blockBrdTimeLst)), blockBrdTimeLst, color='r')
+        ax11.plot(range(len(blockBodyBrdTimeLst)), blockBodyBrdTimeLst, color='blue')
+        # 设置x轴标签
+        ax11.set_xlabel("sys run round")
+        # 设置y轴标签
+        ax11.set_ylabel("Con-Node p2p broadcast time")
+        # 添加图例
+        ax11.legend(['block', 'block body'])
+        # 保存图像到本地文件
+        plt.savefig('SimulateFig/共识节点广播耗时_{}_{}.png'.format(current_time, current_const))
+
         # 显示图形
         plt.show()
 
@@ -547,6 +571,8 @@ if __name__ == "__main__":
         for i in range(len(EZsimulate.AccTxns)):
             EZsimulate.accounts[i].accTxns = EZsimulate.AccTxns[i]
             EZsimulate.accounts[i].recipientList = ACTxnsRecipientList[i]
+        # 更新交易池
+        EZsimulate.txnsPool.freshPool(EZsimulate.accounts, EZsimulate.AccTxns)
         # Node打包收集所有交易形成区块body（可以理解为简单的打包交易）
         blockBodyMsg = EZsimulate.generate_block_body()
         # 挖矿模拟
@@ -566,16 +592,12 @@ if __name__ == "__main__":
     EZsimulate = EZsimulate()
     print('blockchain:')
     print(EZsimulate.blockchain)
-
     EZsimulate.random_generate_nodes()
-
     EZsimulate.random_generate_accounts()
-
     # 初始化p2p网络
     EZsimulate.init_network()
     print('network:')
     print(EZsimulate.network.delay_matrix)
-
     # 根据账户生成创世块（给每个账户分发token），并更新account本地的数据（V-P-B pair）
     EZsimulate.generate_GenesisBlock()
 

@@ -11,9 +11,11 @@ class AccountTxns:
     def __init__(self, sender, senderID, accTxns):
         self.Sender = sender
         self.SenderID = senderID
-        self.AccTxnsHash = None
+        # self.AccTxnsHash = None
         self.AccTxns = accTxns
         self.time = str(datetime.datetime.now()) # 记录时间戳
+        self.Signature = None
+        self.Digest = None
 
     def Encode(self): # 这里encode的只有真正的txn的list
         encoded_tx = pickle.dumps(self.AccTxns)
@@ -22,6 +24,51 @@ class AccountTxns:
     def Decode(to_decode):
         decoded_tx = pickle.loads(to_decode)
         return decoded_tx
+
+    def set_digest(self):
+        def hash(val):
+            if type(val) == str:
+                return hashlib.sha256(val.encode("utf-8")).hexdigest()
+            else:
+                return hashlib.sha256(val).hexdigest()
+
+        digest = hash(self.Encode())
+        self.Digest = digest
+
+    def sig_accTxn(self, load_private_key): # accTxn的摘要信息在签名时赋值
+        def hash(val):
+            # return hashlib.sha256(val.encode("utf-8")).hexdigest()
+            if type(val) == str:
+                return hashlib.sha256(val.encode("utf-8")).hexdigest()
+            else:
+                return hashlib.sha256(val).hexdigest()
+        private_key = load_pem_private_key(load_private_key, password=None)
+        # 使用SHA256哈希算法计算区块的哈希值
+        #block_hash = hashes.Hash(hashes.SHA256())
+        #block_hash.update(self.Encode())
+        #digest = block_hash.finalize()
+        digest = hash(self.Encode())
+        digestBytes = digest.encode('utf-8')
+        self.Digest = digest
+        signature_algorithm = ec.ECDSA(hashes.SHA256())
+        # 对区块哈希值进行签名
+        signature = private_key.sign(data=digestBytes, signature_algorithm=signature_algorithm)
+        self.Signature = signature
+
+    def check_accTxn_sig(self, load_public_key):
+        public_key = load_pem_public_key(load_public_key)
+        digest = self.Digest
+        signature_algorithm = ec.ECDSA(hashes.SHA256())
+        # 验证签名
+        try:
+            public_key.verify(
+                self.Signature,
+                digest,
+                signature_algorithm
+            )
+            return True
+        except:
+            return False
 
 
 class Transaction:

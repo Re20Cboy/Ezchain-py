@@ -5,6 +5,17 @@ import copy
 import Transaction
 import re
 
+class txnsPool:
+    def __init__(self):
+        self.pool = [] # (accTxn's Digest, acc's sig for hash, acc's addr, acc's ID)
+
+    def freshPool(self, accounts, accTxns):
+        for i in range(len(accTxns)):
+            accTxns[i].sig_accTxn(accounts[i].privateKey) # 对accTxn进行签名
+            self.pool.append(copy.deepcopy((accTxns[i].Digest, accTxns[i].Signature, accounts[i].addr, accounts[i].id)))
+
+    def clearPool(self):
+        self.pool = []
 
 class checkedVPBList:
     def __init__(self):
@@ -185,16 +196,14 @@ class MTreeProof:
     def __init__(self, MTPrfList=[]):
         self.MTPrfList = MTPrfList
 
-    def checkPrf(self, accTxns, trueRoot):  # accTxns为待检查的账户交易集合. trueRoot是公链上的mTree root信息
+    def checkPrf(self, accTxnsDigest, trueRoot):  # accTxns为待检查的账户交易集合. trueRoot是公链上的mTree root信息
         def hash(val):
-            # return hashlib.sha256(val.encode("utf-8")).hexdigest()
             if type(val) == str:
                 return hashlib.sha256(val.encode("utf-8")).hexdigest()
             else:
                 return hashlib.sha256(val).hexdigest()
 
-        encodeAccTxns = accTxns.Encode()
-        hashedEncodeAccTxns = hash(encodeAccTxns)
+        hashedEncodeAccTxns = hash(accTxnsDigest)
 
         if hashedEncodeAccTxns != self.MTPrfList[0] and hashedEncodeAccTxns != self.MTPrfList[1]:
             return False
@@ -240,7 +249,8 @@ class MerkleTree:
 
     def buildTree(self, leaves, isGenesisBlcok):
         leaves = [MerkleTreeNode(None, None, MerkleTreeNode.hash(e), e, leafIndex=index) for index, e in
-                  enumerate(leaves, start=0)]
+                enumerate(leaves, start=0)]
+
         for item in leaves:
             self.leaves.append(item)  # 记录叶子节点的备份
 
@@ -332,7 +342,6 @@ class MerkleTree:
             else:
                 print("Input")
             print("Value: " + str(node.value))
-            # print("Content: " + str(node.content))
             print("")
             self.printTree(node.left)
             self.printTree(node.right)

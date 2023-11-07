@@ -123,7 +123,7 @@ class Node:
         block = Block.Block(index = index, mTreeRoot = mTreeRoot, miner = miner, prehash = preBlockHash)
         #设置正确的bloom
         for item in self.tmpBlockBodyMsg.info_Txns:
-            block.bloom.add(item.Sender)
+            block.bloom.add(item[2])
 
         # 对区块进行签名
         sig = self.sig_block(block)
@@ -141,6 +141,10 @@ class Node:
         pass
 
     def receive_msg(self, msg, PKList, accPKList):
+        # 判断是否有重复元素：
+        def has_duplicates(lst):
+            return len(lst) != len(set(lst))
+
         # 接收其他节点发送的区块
         if type(msg) == Message.BlockMsg:
             # 验证block的数据合规性:
@@ -178,18 +182,33 @@ class Node:
                 return False
 
             tmpBloom = Bloom.BloomFilter()
-            for accTxns in msg.info_Txns:
+            senderLst = []
+            for item in msg.info_Txns:
                 # check account是否重复
-                tmpSender = accTxns.AccTxns[0].Sender
-                tmpSenderID = accTxns.SenderID
-                for txn in accTxns.AccTxns:
-                    #load_public_key_path = ACCOUNT_PUBLIC_KEY_PATH+"public_key_node_"+str(tmpSenderID)+".pem"
-                    load_public_key = accPKList[tmpSenderID]
-                    if not txn.check_txn_sig(load_public_key):
-                        return False
-                    if tmpSender is not txn.Sender:
-                        return False
-                tmpBloom.add(accTxns.Sender)
+                accTxnsDigest = item[0]
+                accTxnsDigestBytes = accTxnsDigest.encode('utf-8')
+                accTxnsSig = item[1]
+                accTxnsSender = item[2]
+                senderLst.append(accTxnsSender)
+                accTxnsSenderID = item[3]
+                # 检测签名
+                load_public_key = accPKList[accTxnsSenderID]
+                public_key = load_pem_public_key(load_public_key)
+                signature_algorithm = ec.ECDSA(hashes.SHA256())
+                # 添加bloom
+                tmpBloom.add(accTxnsSender)
+                # 验证签名
+                try:
+                    public_key.verify(
+                        accTxnsSig,
+                        accTxnsDigestBytes,
+                        signature_algorithm
+                    )
+                    continue
+                except:
+                    return False
+            if has_duplicates(senderLst):
+                return False
 
             # check bloom
             if self.blockchain.get_latest_block().get_bloom().bit_array != tmpBloom.bit_array:
