@@ -11,6 +11,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
 from pympler import asizeof
 import time
+from utils import ensure_directory_exists
 
 class Account:
     def __init__(self, ID):
@@ -128,9 +129,11 @@ class Account:
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
             )
         # 保存私钥到文件（请谨慎操作，不要轻易泄露私钥）
+        ensure_directory_exists(privatePath)
         with open(privatePath, "wb") as f:
             f.write(self.privateKey)
         # 保存公钥到文件（公钥可以公开分发给需要验证方）
+        ensure_directory_exists(publicPath)
         with open(publicPath, "wb") as f:
             f.write(self.publicKey)
 

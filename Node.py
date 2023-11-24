@@ -11,6 +11,8 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
+from utils import ensure_directory_exists, write_data_to_file
+
 
 class Node:
     def __init__(self, id, neighbors = [], port = 0):
@@ -33,7 +35,10 @@ class Node:
         self.blockCheckCostedTime = []  # 用于记录验证消耗的时间，最后用于计算tps、区块确认等数据
         self.blockBodyCheckCostedTime = []  # 用于记录验证消耗的时间，最后用于计算tps、区块确认等数据
 
-    def generate_random_node(self): # 随机生成node的公钥、私钥及地址信息
+    def generate_random_node(self): 
+        '''
+        随机生成node的公钥、私钥及地址信息
+        '''
         # 生成随机地址
         self.addr = ''.join(random.choices(string.ascii_letters + string.digits, k=42)) # bitcoin地址字符数为42
         # 生成私钥
@@ -57,11 +62,11 @@ class Node:
                 format=serialization.PublicFormat.SubjectPublicKeyInfo
             )
         # 保存私钥到文件（请谨慎操作，不要轻易泄露私钥）
-        with open(privatePath, "wb") as f:
-            f.write(self.privateKey)
+        ensure_directory_exists(privatePath)
+        write_data_to_file(privatePath, self.privateKey)
         # 保存公钥到文件（公钥可以公开分发给需要验证方）
-        with open(publicPath, "wb") as f:
-            f.write(self.publicKey)
+        ensure_directory_exists(publicPath)
+        write_data_to_file(publicPath, self.publicKey)
 
     def random_set_neighbors(self, nodeNum = NODE_NUM): # nodeNum表示所有节点的数量
         def random_sampling(nodeNum):
