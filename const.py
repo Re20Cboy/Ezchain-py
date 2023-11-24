@@ -1,17 +1,17 @@
 TNX_CSV_PATH = 'D:/EZchain-V2/Ezchain-py/300Txs.csv'
 TNX_CSV_NUM = 300 #csv文件中交易的总数量
 
-SAMPLE_NEIGHBORS_NUM = 5 #随机链接的邻居节点的数量
+SAMPLE_NEIGHBORS_NUM = 30 #随机链接的邻居节点的数量
 
 NODE_ACCOUNT_DELAY = 1.5 # node和acc之间的延迟
 ACC_ACC_DELAY = 1.5 # acc和acc之间的延迟
 
-NODE_NUM = 10 #模拟节点的数量
-ACCOUNT_NUM = 500 #模拟账户数量
+NODE_NUM = 70 #模拟节点的数量
+ACCOUNT_NUM = 120 #模拟账户数量
 
 PICK_TXNS_NUM = int(ACCOUNT_NUM*ACCOUNT_NUM / 2) #一次打包的交易的数量，理论上不应当超过 ACCOUNT_NUM^2 / 2 （/2是因为随机时最少有ACCOUNT_NUM/ 2个账户参与交易）
 
-SIMULATE_ROUND = 5 # 挖矿轮数
+SIMULATE_ROUND = 4 # 挖矿轮数
 
 BANDWIDTH = 1024 * 1024 * 1 #网络带宽
 HASH_DIFFICULTY = 0.0005 #挖矿难度，即，一次hash运算挖矿成功的概率

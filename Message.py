@@ -43,6 +43,3 @@ class BlockBodyMsg: #即，交易的原始信息(以默克尔树的形式)
 
     def print_mTree(self):
         self.info.printTree(self.info.getRootHash())
-
-
-

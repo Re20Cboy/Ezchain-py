@@ -237,6 +237,109 @@ class Account:
         self.acc2nodeDelay.append(asizeof.asizeof(accTxns) * 8 / BANDWIDTH + NODE_ACCOUNT_DELAY)
         return accTxns
 
+    def optimized_generate_txns(self, randomRecipients):
+        def pick_values_and_generate_txns(V, tmpSender, tmpRecipient, tmpNonce, tmpTxnHash, tmpTime): # V为int，是要挑拣的值的总量
+            if V < 1:
+                raise ValueError("参数V不能小于1")
+            tmpCost = 0 # 动态记录要消耗多少值
+            costList = [] # 记录消耗的Value的index
+            changeValueIndex = -1 # 记录找零值的索引
+            txn_2_sender = None
+            txn_2_recipient = None
+            value_Enough = False
+            for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
+                value = VPBpair[0]
+                if value in [i[0] for i in self.costedValuesAndRecipes]:
+                    continue
+                tmpCost += value.valueNum
+                if tmpCost >= V: # 满足值的需求了，花费到此value为止
+                    changeValueIndex = i
+                    costList.append(i)
+                    value_Enough = True
+                    break
+                changeValueIndex = i
+                costList.append(i)
+
+            # 判断余额是否足够
+            if not value_Enough:
+                raise ValueError("余额不足！")
+
+            change = tmpCost-V # 计算找零
+
+            if change > 0:  # 需要找零，对值进行分割
+                V1, V2 = self.ValuePrfBlockPair[changeValueIndex][0].split_value(change) # V2是找零
+                #创建找零的交易
+                txn_2_sender = Transaction.Transaction(sender=tmpSender, recipient=tmpSender,
+                                                 nonce=tmpNonce, signature=None, value=[V2],
+                                                 tx_hash=tmpTxnHash, time=tmpTime)
+                txn_2_sender.sig_txn(self.privateKey)
+                txn_2_recipient = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                                                 nonce=tmpNonce, signature=None, value=[V1],
+                                                 tx_hash=tmpTxnHash, time=tmpTime)
+                txn_2_recipient.sig_txn(self.privateKey)
+                self.costedValuesAndRecipes.append((V1, tmpRecipient))
+            else:
+                changeValueIndex = -1
+            return costList, changeValueIndex, txn_2_sender, txn_2_recipient
+
+        # todo:重新写找零逻辑，最大化利用零钱
+        accTxns = []
+        tmpBalance = self.balance
+
+        for item in randomRecipients:
+            tmpTime = str(datetime.datetime.now())
+            tmpTxnHash = '0x19f1df2c7ee6b464720ad28e903aeda1a5ad8780afc22f0b960827bd4fcf656d' # todo: 交易哈希暂用定值，待实现
+            tmpSender = self.addr
+            tmpRecipient = item.addr
+            tmpNonce = 0  # 待补全
+            # tmpSig = unit.generate_signature(tmpSender)
+            tmpV = random.randint(1, 1000)
+            if tmpBalance <= tmpV: # 余额大于0时才能交易！
+                raise ValueError("余额不足！！！")
+            else:
+                tmpBalance -= tmpV
+
+            # costList是花费的值的索引列表（包括需要找零的值），changeValueIndex是唯一找零值的索引（已包含在costList中）
+            costList, changeValueIndex, changeTxn2Sender, changeTxn2Recipient = pick_values_and_generate_txns(tmpV, tmpSender, tmpRecipient, tmpNonce, tmpTxnHash, tmpTime) # 花费的值和找零
+            if changeValueIndex < 0: # 不需要找零
+                tmpValues = []
+                for index in costList:
+                    tmpValues.append(self.ValuePrfBlockPair[index][0])
+                    self.costedValuesAndRecipes.append((self.ValuePrfBlockPair[index][0], tmpRecipient))
+                    # 删除此值
+                    # self.delete_VPBpair(i)
+                tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                                                 nonce=tmpNonce, signature=None, value=tmpValues,
+                                                 tx_hash=tmpTxnHash, time=tmpTime)
+                tmpTxn.sig_txn(load_private_key=self.privateKey)
+                accTxns.append(tmpTxn)
+            else: # 需要找零
+                tmpValues = []
+                for i in costList:
+                    if i != changeValueIndex: # 表示i被花费又不是唯一找零值
+                        tmpValues.append(self.ValuePrfBlockPair[i][0])
+                        self.costedValuesAndRecipes.append((self.ValuePrfBlockPair[i][0], tmpRecipient))
+
+                if tmpValues != []: # 非找零值且被花费的
+                    tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                                                     nonce=tmpNonce, signature=None, value=tmpValues,
+                                                     tx_hash=tmpTxnHash, time=tmpTime)
+                    tmpTxn.sig_txn(load_private_key=self.privateKey)
+                    accTxns.append(tmpTxn)
+
+                tmpP = self.ValuePrfBlockPair[changeValueIndex][1]
+                tmpB = self.ValuePrfBlockPair[changeValueIndex][2]
+                self.delete_VPBpair(changeValueIndex)
+                self.add_VPBpair([changeTxn2Recipient.Value[0], copy.deepcopy(tmpP), copy.deepcopy(tmpB)]) # V1在本轮的后续交易中都不可再使用
+                self.add_VPBpair([changeTxn2Sender.Value[0], copy.deepcopy(tmpP), copy.deepcopy(tmpB)])
+
+                accTxns.append(changeTxn2Sender)
+                accTxns.append(changeTxn2Recipient)
+
+        self.accTxns = accTxns
+        self.acc2nodeDelay.append(asizeof.asizeof(accTxns) * 8 / BANDWIDTH + NODE_ACCOUNT_DELAY)
+        return accTxns
+
     def receipt_txn_and_prf(self):
         pass
 
@@ -385,7 +488,6 @@ class Account:
         self.verifyTimeCostList.append(VerTime)
         self.verifyStorageCostList.append(PrfSize)
         return True
-
 
 
     def check_VPBpair(self, VPBpair, bloomPrf, blockchain):

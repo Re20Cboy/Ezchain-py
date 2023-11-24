@@ -15,6 +15,8 @@ import unit
 from pympler import asizeof
 import datetime #系统时间作为文件名，防止记录时同文件名覆盖
 import cProfile # 分析性能
+import csv #将实验结果存储在csv表格中
+
 
 class EZsimulate:
     def __init__(self):
@@ -343,6 +345,14 @@ class EZsimulate:
         ax1.grid(True)
         # 保存图像到本地文件
         plt.savefig('SimulateFig/TPS图像_{}_{}.png'.format(current_time, current_const))
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/TPS_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入列表中的每个元素作为一行
+            for item in self.TPSList:
+                writer.writerow([item])
 
         # # # # # # # # 绘制挖矿耗时图像 # # # # # # # #
         # 创建一个Figure对象和一个子图
@@ -357,6 +367,14 @@ class EZsimulate:
         ax2.set_title("EZchain sys mine time")
         # 保存图像到本地文件
         plt.savefig('SimulateFig/挖矿耗时_{}_{}.png'.format(current_time, current_const))
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/Mine_time_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入列表中的每个元素作为一行
+            for item in self.mineTimeList:
+                writer.writerow([item])
 
         # # # # # # # # 绘制Node存储成本图像 # # # # # # # #
         mineTimeList, storageCost = self.calculateNodeStorageCost()
@@ -370,6 +388,17 @@ class EZsimulate:
         ax3.set_title('Con-node storage cost and sys run time')
         # 保存图像到本地文件
         plt.savefig('SimulateFig/Node存储成本_{}_{}.png'.format(current_time, current_const))
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/Node_S_Cost_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        # 打开CSV文件并创建一个写入器对象
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入表头
+            writer.writerow(['mineTimeList', 'storageCostList'])
+            # 将列表逐行写入CSV文件
+            for item1, item2 in zip(mineTimeList, storageCost):
+                writer.writerow([item1, item2])
 
         # # # # # # # # 绘制Node验证成本图像 # # # # # # # #
         verifyCostList = self.calculateNodeVerifyCost()
@@ -385,8 +414,17 @@ class EZsimulate:
         ax4.set_title("Con-node verify time with sys run round")
         # 保存图像到本地文件
         plt.savefig('SimulateFig/Node验证成本_{}_{}.png'.format(current_time, current_const))
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/Node_VerBlock_time_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入列表中的每个元素作为一行
+            for item in verifyCostList:
+                writer.writerow([item])
 
         # # # # # # # # 绘制account验证存储成本图像 # # # # # # # #
+        # viewNodeIndex = 0  # 以哪个账户为观察视角观察消耗的验证时间
         def bitList2MBList(bitList):
             MBList = []
             for item in bitList:
@@ -396,13 +434,13 @@ class EZsimulate:
         # 创建一个Figure对象和一个子图
         fig5, ax5 = plt.subplots()
         # 抽取前五个acc作为观察对象，绘制其存验证储成本曲线
-        maxIndex = min(len(self.accounts), 5)
+        maxIndex = min(len(self.accounts), 1)
         sumStorageCostList = []
         avgStorageCostList = []
         minIndex = None
         for index in range(maxIndex):
             accStorageCostList = bitList2MBList(self.accounts[index].verifyStorageCostList)  # 从bit转化为MB
-            ax5.plot(range(len(accStorageCostList)), accStorageCostList)
+            # ax5.plot(range(len(accStorageCostList)), accStorageCostList)
             if minIndex == None:
                 minIndex = len(accStorageCostList)
             else:
@@ -414,17 +452,59 @@ class EZsimulate:
                     sumStorageCostList[i] += accStorageCostList[i]
         for i in sumStorageCostList:
             avgStorageCostList.append(i / maxIndex)
-        ax5.plot(range(len(avgStorageCostList)), avgStorageCostList, color='black')
+
+        # 计算阶段平均值
+        Fig5_newAvgLst = [0]
+        Fig5_newAvgLstX = [0]
+        Fig5_phase = 50
+        Fig5_index = 0
+        Fig5_tmpRound = int(len(avgStorageCostList) / Fig5_phase)
+        for r in range(Fig5_tmpRound):
+            tmpSun = 0
+            for i in range(Fig5_phase):
+                tmpIndex = Fig5_index + i
+                tmpSun += avgStorageCostList[tmpIndex]
+            Fig5_newAvgLst.append(tmpSun/Fig5_phase)
+            Fig5_index += Fig5_phase
+            Fig5_newAvgLstX.append(Fig5_index)
+        ax5.plot(range(len(avgStorageCostList)), avgStorageCostList, color='r')
+        ax5.plot(Fig5_newAvgLstX, Fig5_newAvgLst, color='black')
+
         # 设置x轴标签
         ax5.set_xlabel("reciped value number")
         # 设置y轴标签
         ax5.set_ylabel("Acc reciped VPB's size(MB)")
         # 设置标题
         ax5.set_title("Acc reciped VPB's size with reciped value number")
+        # 添加图例
+        ax5.legend(['newAvgLst', 'avgStorageCostList'])
         # 保存图像到本地文件
         plt.savefig('SimulateFig/account验证存储成本_{}_{}.png'.format(current_time, current_const))
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/Acc_recipe_VPB_size(NewAvg)_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入表头
+            writer.writerow(['newAvgLst_X', 'newAvgLst_Y'])
+            # 将列表逐行写入CSV文件
+            for item1, item2 in zip(Fig5_newAvgLstX, Fig5_newAvgLst):
+                writer.writerow([item1, item2])
+
+        ### 存储到csv表格中 ###
+        csv_name2 = 'SimulateCSV/Acc_recipe_VPB_size(Avg)_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name2, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入表头
+            writer.writerow(['AvgLst_X', 'AvgLst_Y'])
+            # 将列表逐行写入CSV文件
+            for item1, item2 in zip(range(len(avgStorageCostList)), avgStorageCostList):
+                writer.writerow([item1, item2])
+
 
         # # # # # # # # 绘制account验证时间成本图像 # # # # # # # #
+        acc0_VerTimeCostList = [] # 用于记录acc[0]的验证成本，并存储在csv表格中
         # 创建一个Figure对象和一个子图
         fig6, ax6 = plt.subplots()
         # 抽取前五个acc作为观察对象，绘制其验证时间成本曲线
@@ -434,6 +514,8 @@ class EZsimulate:
         minIndex = None
         for index in range(maxIndex):
             accVerTimeCostList = self.accounts[index].verifyTimeCostList
+            if index == 0:
+                acc0_VerTimeCostList = accVerTimeCostList
             ax6.plot(range(len(accVerTimeCostList)), accVerTimeCostList)
             if minIndex == None:
                 minIndex = len(accVerTimeCostList)
@@ -456,6 +538,50 @@ class EZsimulate:
         # 保存图像到本地文件
         plt.savefig('SimulateFig/account验证时间成本_{}_{}.png'.format(current_time, current_const))
 
+        # 计算阶段平均值
+        Fig6_newAvgLst = [0]
+        Fig6_newAvgLstX = [0]
+        Fig6_phase = 50
+        Fig6_index = 0
+        Fig6_tmpRound = int(len(acc0_VerTimeCostList) / Fig6_phase)
+        for r in range(Fig6_tmpRound):
+            tmpSun = 0
+            for i in range(Fig6_phase):
+                tmpIndex = Fig6_index + i
+                tmpSun += acc0_VerTimeCostList[tmpIndex]
+            Fig6_newAvgLst.append(tmpSun / Fig6_phase)
+            Fig6_index += Fig6_phase
+            Fig6_newAvgLstX.append(Fig6_index)
+
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/Acc_ver_vpb_time(acc_0_avg)_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入表头
+            writer.writerow(['acc0_ver_vpb_avg_time_x', 'acc0_ver_vpb_avg_time_y'])
+            # 将列表逐行写入CSV文件
+            for item1, item2 in zip(Fig6_newAvgLstX, Fig6_newAvgLst):
+                writer.writerow([item1, item2])
+
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/Acc_ver_vpb_time(acc_0)_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入列表中的每个元素作为一行
+            for item in acc0_VerTimeCostList:
+                writer.writerow([item])
+
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/Acc_ver_vpb_time(all_avg)_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入列表中的每个元素作为一行
+            for item in avgVerTimeCostList:
+                writer.writerow([item])
+
         # # # # # # # # 绘制每轮交易数和转移的值的数量图像 # # # # # # # #
         # 创建一个Figure对象和一个子图
         fig7, ax7 = plt.subplots()
@@ -469,6 +595,17 @@ class EZsimulate:
         ax7.legend(['Txns Num', 'Values Num'])
         # 保存图像到本地文件
         plt.savefig('SimulateFig/交易数和转移的值_{}_{}.png'.format(current_time, current_const))
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/Txn_and_Value_Num_1R_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入表头
+            writer.writerow(['TxnsNum1R', 'ValuesNum1R'])
+            # 将列表逐行写入CSV文件
+            for item1, item2 in zip(self.TxnsNumList, self.transVNumList):
+                writer.writerow([item1, item2])
+
 
         # # # # # # # # 安全情况下账户对于交易的确认延迟图像 # # # # # # # #
         viewNodeIndex = 0  # 以哪个账户为观察视角观察消耗的验证时间
@@ -492,6 +629,14 @@ class EZsimulate:
         ax8.set_ylabel("acc[0]'s txn confirm time")
         # 保存图像到本地文件
         plt.savefig('SimulateFig/acc确认延迟_{}_{}.png'.format(current_time, current_const))
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/Acc_confirm_time_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入列表中的每个元素作为一行
+            for item in confirmTime:
+                writer.writerow([item])
 
         # # # # # # # # 平均分叉率图像 # # # # # # # #
         fig9, ax9 = plt.subplots()
@@ -513,16 +658,55 @@ class EZsimulate:
         ax10.plot(range(len(accRoundVPBCostList)), accRoundVPBCostList, color='r')
         ax10.plot(range(len(accRoundCKCostList)), accRoundCKCostList, color='blue')
         ax10.plot(range(len(accRoundAllCostList)), accRoundAllCostList, color='black')
+
+        # 计算阶段平均值
+        Fig10_newAvgLst = [0]
+        Fig10_newAvgLstX = [0]
+        Fig10_phase = 50
+        Fig10_index = 0
+        Fig10_tmpRound = int(len(accRoundVPBCostList) / Fig10_phase)
+        for r in range(Fig10_tmpRound):
+            tmpSun = 0
+            for i in range(Fig10_phase):
+                tmpIndex = Fig10_index + i
+                tmpSun += accRoundVPBCostList[tmpIndex]
+            Fig10_newAvgLst.append(tmpSun / Fig10_phase)
+            Fig10_index += Fig10_phase
+            Fig10_newAvgLstX.append(Fig10_index)
+        ax10.plot(Fig10_newAvgLstX, Fig10_newAvgLst, color='green')
+
         # 设置x轴标签
         ax10.set_xlabel("sys run round")
         # 设置y轴标签
         ax10.set_ylabel("Acc Storage Cost(MB)")
         # 添加图例
-        ax10.legend(['VPB', 'CK', 'All'])
+        ax10.legend(['VPB', 'CK', 'All', 'Avg'])
         # 保存图像到本地文件
         plt.savefig('SimulateFig/acc每轮存储成本_{}_{}.png'.format(current_time, current_const))
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/Acc_S_cost(VPB_CK_ALL)_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入表头
+            writer.writerow(['VPB', 'CK', 'All'])
+            # 将列表逐行写入CSV文件
+            for item1, item2, item3 in zip(accRoundVPBCostList, accRoundCKCostList, accRoundAllCostList):
+                writer.writerow([item1, item2, item3])
 
-        # # # # # # # # acc每轮存储成本图像 # # # # # # # #
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/Acc_S_cost(NewAvg)_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入表头
+            writer.writerow(['NewAvg_X', 'NewAvg_Y'])
+            # 将列表逐行写入CSV文件
+            for item1, item2 in zip(Fig10_newAvgLstX, Fig10_newAvgLst):
+                writer.writerow([item1, item2])
+
+
+        # # # # # # # # 共识节点广播耗时图像 # # # # # # # #
         fig11, ax11 = plt.subplots()
         blockBrdTimeLst = self.blockBrdTimeLst
         blockBodyBrdTimeLst = self.blockBodyBrdTimeLst
@@ -537,6 +721,17 @@ class EZsimulate:
         ax11.legend(['block', 'block body'])
         # 保存图像到本地文件
         plt.savefig('SimulateFig/共识节点广播耗时_{}_{}.png'.format(current_time, current_const))
+        ### 存储到csv表格中 ###
+        csv_name = 'SimulateCSV/Node_brd_time_{}_{}.csv'.format(current_time, current_const)
+        # 打开一个CSV文件进行写入
+        with open(csv_name, 'w', newline='') as file:
+            writer = csv.writer(file)
+            # 写入表头
+            writer.writerow(['block_brd_time', 'body_brd_time'])
+            # 将列表逐行写入CSV文件
+            for item1, item2 in zip(blockBrdTimeLst, blockBodyBrdTimeLst):
+                writer.writerow([item1, item2])
+
 
         # 显示图形
         plt.show()
