@@ -1,4 +1,4 @@
-TNX_CSV_PATH = 'D:/EZchain-V2/Ezchain-py/300Txs.csv'
+# TNX_CSV_PATH = 'D:/EZchain-V2/Ezchain-py/300Txs.csv'
 TNX_CSV_NUM = 300 #csv文件中交易的总数量
 
 SAMPLE_NEIGHBORS_NUM = 30 #随机链接的邻居节点的数量
