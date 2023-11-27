@@ -2,7 +2,7 @@
 
 The development of underlying technologies in blockchain mostly revolves around a difficult problem: how to enhance the performance of the system and reduce various costs of nodes (such as storage and verification) without compromising system’s security and decentralization. Layer-1 sharding, layer-2 off-chain solutions and cross-chain protocols have provided elegant solutions for this challenge. However, they cannot yet be considered as a "silver bullet". We proposes a novel decentralized scale-out ledger system designed for web3.0, aiming to enable blockchain technology to truly support ledger applications in large-scale fully decentralized networks.
 
-## Features
+## Highlights
 
 * Scalability: System throughput is directly proportional to node size, not constrained by bandwidth resources.
 * Hardware Compatibility: Designed for consumer-grade hardware, supporting necessary storage, computation, and verification requirements.
@@ -21,6 +21,19 @@ cd xxx
 pip install -r requirements.txt
 ```
 
+### Const
+```
+SAMPLE_NEIGHBORS_NUM controls the neighbors' number of each p2p node (include consensus and account).
+NODE_ACCOUNT_DELAY and ACC_ACC_DELAY control the delay of consensus node to account node and the delay of account node to account node (referring here to queuing delays, excluding transmission times).
+NODE_NUM controls number of consensus nodes.
+ACCOUNT_NUM controls number of account nodes.
+PICK_TXNS_NUM controls the upper limit of transactions packaged at one round (block), it should theoretically not exceed ACCOUNT_NUM^2/2.
+SIMULATE_ROUND controls the mining round.
+BANDWIDTH controls the network's bandwidth.
+HASH_DIFFICULTY controls the mining difficulty, i.e., the probability of successful mining in one hash computation.
+HASH_POWER controls the hash computing power, indicating the number of hashes computation performed per second.
+GENESIS_SENDER and GENESIS_MINER_ID represent genesis sender's address and genesis miner's ID.
+```
 ### Run
 
 ```
