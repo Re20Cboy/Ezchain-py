@@ -1,46 +1,68 @@
 # -*- coding: utf-8 -*-#
 
-# 提供二进制向量
 from bitarray import bitarray
-# 提供hash函数mmh3.hash()
 import mmh3
 
-
-class BloomFilter(set): #set是bloom的父类
+class BloomFilter(set):  # Inherits from the set class
     """
-    size: 二进制向量长度
-    hash_count: hash函数个数
+    A Bloom Filter implementation.
 
-    一般来说，hash函数的个数要满足（hash函数个数=二进制长度*ln2/插入的元素个数）
+    Attributes:
+        size (int): Length of the binary vector.
+        hash_count (int): Number of hash functions.
+    
+    The number of hash functions should satisfy:
+    (hash_count = binary_vector_length * ln(2) / number_of_elements_inserted)
     """
-    def __init__(self, size = 1024 * 1024, hash_count = 5): # hash_count的作用是确定使用多少个不同的哈希函数来插入和查询元素。
-        super(BloomFilter, self).__init__() #调用父类set的构造函数
+    def __init__(self, size=1024 * 1024, hash_count=5):
+        """
+        Initializes the Bloom Filter with a given size and hash count.
+
+        Parameters:
+            size (int): The size of the bit array. Default is 1024 * 1024.
+            hash_count (int): The number of hash functions to use. Default is 5.
+        """
+        super(BloomFilter, self).__init__()  # Calling the constructor of the superclass 'set'
         self.bit_array = bitarray(size)
-        self.bit_array.setall(0)
+        self.bit_array.setall(0)  # Initialize all bits to 0
         self.size = size
-        self.hash_count = hash_count # hash_count = size * ln(2) / num_elements，哈希函数的个数应该满足布隆过滤器的大小、预期的元素数量以及允许的误判率之间的关系
-        #当size = 1024 * 1024 时，假设插入元素也为1024 * 1024，则hash_count推荐设置为：5
+        self.hash_count = hash_count  # hash_count = size * ln(2) / num_elements
+
     def __len__(self):
+        """ Returns the size of the binary vector. """
         return self.size
 
-    # 使得BloomFilter可迭代
     def __iter__(self):
+        """ Makes the Bloom Filter iterable. """
         return iter(self.bit_array)
 
     def add(self, item):
+        """
+        Adds an item to the Bloom Filter.
+
+        Parameters:
+            item: The item to be added to the Bloom Filter.
+        """
         for ii in range(self.hash_count):
-            # 假设hash完的值是22，size为20，那么取模结果为2，将二进制向量第2位置为1
-            index = mmh3.hash(item, ii) % self.size
-            self.bit_array[index] = 1
+            index = mmh3.hash(item, ii) % self.size  # Calculate the bit position to set
+            self.bit_array[index] = 1  # Set the bit at the calculated position
 
         return self
 
-    # 可以使用 xx in BloomFilter方式来判断元素是否在过滤器内（有小概率会误判不存在的元素也存在, 但是已存在的元素绝对不会误判为不存在）
     def __contains__(self, item):
-        out = True
+        """
+        Checks if an item is in the Bloom Filter.
+
+        Parameters:
+            item: The item to check for in the Bloom Filter.
+
+        Returns:
+            bool: True if the item might be in the filter, False if it's definitely not.
+        """
         for ii in range(self.hash_count):
             index = mmh3.hash(item, ii) % self.size
             if self.bit_array[index] == 0:
-                out = False
+                return False  # Item is definitely not in the filter
 
-        return out
+        return True  # Item might be in the filter (subject to false positives)
+
