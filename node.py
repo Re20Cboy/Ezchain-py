@@ -1,10 +1,10 @@
-import Block
-import Blockchain
-import Message
+import block
+import blockchain
+import message
 from const import *
 import random
 import time
-import Bloom
+import bloom
 # 签名所需引用
 import string
 from cryptography.hazmat.primitives.asymmetric import ec
@@ -19,7 +19,7 @@ class Node:
         self.id = id
         #self.port = port
         self.neighbors = neighbors
-        self.blockchain = Blockchain.Blockchain()
+        self.blockchain = blockchain.Blockchain()
         #self.current_block = None  # 当前正在处理的区块
         #self.difficulty = 4  # PoW共识难度
         self.tmpBlockMsg = None # 临时存储的区块信息
@@ -114,7 +114,7 @@ class Node:
             return False
 
     def create_new_block_body(self):
-        blockBody = Message.BlockBodyMsg()
+        blockBody = message.BlockBodyMsg()
         blockBody.random_generate_mTree(PICK_TXNS_NUM)
         self.tmpBlockBodyMsg = blockBody
 
@@ -125,7 +125,7 @@ class Node:
             mTreeRoot = self.tmpBlockBodyMsg.get_mTree_root_hash()
         #bloom = #布隆过滤器待实现，暂时使用缺省值
         miner = self.id
-        block = Block.Block(index = index, mTreeRoot = mTreeRoot, miner = miner, prehash = preBlockHash)
+        block = block.Block(index = index, mTreeRoot = mTreeRoot, miner = miner, prehash = preBlockHash)
         #设置正确的bloom
         for item in self.tmpBlockBodyMsg.info_Txns:
             block.bloom.add(item[2])
@@ -134,7 +134,7 @@ class Node:
         sig = self.sig_block(block)
         block.sig = sig
 
-        self.tmpBlockMsg = Message.BlockMsg(block)
+        self.tmpBlockMsg = message.BlockMsg(block)
         self.blockchain.add_block(block)
 
     def is_valid_block(self, block):
@@ -151,7 +151,7 @@ class Node:
             return len(lst) != len(set(lst))
 
         # 接收其他节点发送的区块
-        if type(msg) == Message.BlockMsg:
+        if type(msg) == message.BlockMsg:
             # 验证block的数据合规性:
             # 1. 数字签名验证； 2. Nonce验证； 3. 数据格式验证 ###注意此处不需要对bloom进行验证，直接使用bloom来进行交易打包和挖掘新块即可。
             # 此过程几乎不耗时
@@ -173,7 +173,7 @@ class Node:
             run_time = check_block_end_time - check_block_start_time
             self.blockCheckCostedTime.append(run_time)
 
-        elif type(msg) == Message.BlockBodyMsg:
+        elif type(msg) == message.BlockBodyMsg:
             # 验证block body的数据合规性
             # 1. 数字签名验证； 2. 默克尔树验证； 3. account（是否重复）验证 4. Txn格式的正确 5. 验证bloom的合法性
             ### 可以创建一个公共的交易数据空间，在winner节点需要传输BlockBodyMsg进行验证时，则可以广播索引即可，这样最大限度地节省带宽资源。
@@ -186,7 +186,7 @@ class Node:
             if not checkTreeFlag: #测试默克尔树的构造是否正确
                 return False
 
-            tmpBloom = Bloom.BloomFilter()
+            tmpBloom = bloom.BloomFilter()
             senderLst = []
             for item in msg.info_Txns:
                 # check account是否重复

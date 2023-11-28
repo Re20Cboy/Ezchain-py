@@ -1,7 +1,7 @@
 import random
 import datetime
 import unit
-import Transaction
+import transaction
 import copy
 from const import *
 import hashlib
@@ -169,11 +169,11 @@ class Account:
             if change > 0:  # 需要找零，对值进行分割
                 V1, V2 = self.ValuePrfBlockPair[changeValueIndex][0].split_value(change) # V2是找零
                 #创建找零的交易
-                txn_2_sender = Transaction.Transaction(sender=tmpSender, recipient=tmpSender,
+                txn_2_sender = transaction.Transaction(sender=tmpSender, recipient=tmpSender,
                                                  nonce=tmpNonce, signature=None, value=[V2],
                                                  tx_hash=tmpTxnHash, time=tmpTime)
                 txn_2_sender.sig_txn(self.privateKey)
-                txn_2_recipient = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                txn_2_recipient = transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                  nonce=tmpNonce, signature=None, value=[V1],
                                                  tx_hash=tmpTxnHash, time=tmpTime)
                 txn_2_recipient.sig_txn(self.privateKey)
@@ -208,7 +208,7 @@ class Account:
                     self.costedValuesAndRecipes.append((self.ValuePrfBlockPair[index][0], tmpRecipient))
                     # 删除此值
                     # self.delete_VPBpair(i)
-                tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                tmpTxn = transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                  nonce=tmpNonce, signature=None, value=tmpValues,
                                                  tx_hash=tmpTxnHash, time=tmpTime)
                 tmpTxn.sig_txn(load_private_key=self.privateKey)
@@ -221,7 +221,7 @@ class Account:
                         self.costedValuesAndRecipes.append((self.ValuePrfBlockPair[i][0], tmpRecipient))
 
                 if tmpValues != []: # 非找零值且被花费的
-                    tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                    tmpTxn = transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                      nonce=tmpNonce, signature=None, value=tmpValues,
                                                      tx_hash=tmpTxnHash, time=tmpTime)
                     tmpTxn.sig_txn(load_private_key=self.privateKey)
@@ -272,11 +272,11 @@ class Account:
             if change > 0:  # 需要找零，对值进行分割
                 V1, V2 = self.ValuePrfBlockPair[changeValueIndex][0].split_value(change) # V2是找零
                 #创建找零的交易
-                txn_2_sender = Transaction.Transaction(sender=tmpSender, recipient=tmpSender,
+                txn_2_sender = transaction.Transaction(sender=tmpSender, recipient=tmpSender,
                                                  nonce=tmpNonce, signature=None, value=[V2],
                                                  tx_hash=tmpTxnHash, time=tmpTime)
                 txn_2_sender.sig_txn(self.privateKey)
-                txn_2_recipient = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                txn_2_recipient = transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                  nonce=tmpNonce, signature=None, value=[V1],
                                                  tx_hash=tmpTxnHash, time=tmpTime)
                 txn_2_recipient.sig_txn(self.privateKey)
@@ -311,7 +311,7 @@ class Account:
                     self.costedValuesAndRecipes.append((self.ValuePrfBlockPair[index][0], tmpRecipient))
                     # 删除此值
                     # self.delete_VPBpair(i)
-                tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                tmpTxn = transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                  nonce=tmpNonce, signature=None, value=tmpValues,
                                                  tx_hash=tmpTxnHash, time=tmpTime)
                 tmpTxn.sig_txn(load_private_key=self.privateKey)
@@ -324,7 +324,7 @@ class Account:
                         self.costedValuesAndRecipes.append((self.ValuePrfBlockPair[i][0], tmpRecipient))
 
                 if tmpValues != []: # 非找零值且被花费的
-                    tmpTxn = Transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                    tmpTxn = transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                      nonce=tmpNonce, signature=None, value=tmpValues,
                                                      tx_hash=tmpTxnHash, time=tmpTime)
                     tmpTxn.sig_txn(load_private_key=self.privateKey)
@@ -393,7 +393,7 @@ class Account:
 
             # 检测：ownerAccTxnsList和ownerMTreePrfList的信息是相符的
             # 注意，这里的Encode()函数只对accTxns进行编码，因此可以设sender='sender'，senderID=None 结果不影响。
-            uncheckedAccTxns = Transaction.AccountTxns(sender='sender', senderID=None, accTxns=ownerAccTxnsList)
+            uncheckedAccTxns = transaction.AccountTxns(sender='sender', senderID=None, accTxns=ownerAccTxnsList)
             uncheckedMTreePrf = unit.MTreeProof(MTPrfList=ownerMTreePrfList)
             uncheckedAccTxns.set_digest()
             accTxnsDigest = uncheckedAccTxns.Digest
@@ -571,7 +571,7 @@ class Account:
                 ownerMTreePrfList = prfUnit.ownerMTreePrfList
                 # 创世块的检测
                 if ownerMTreePrfList == [blockchain.chain[0].get_mTreeRoot()]:  # 说明这是创世块
-                    tmpGenesisAccTxns = Transaction.AccountTxns(GENESIS_SENDER, -1, ownerAccTxnsList)
+                    tmpGenesisAccTxns = transaction.AccountTxns(GENESIS_SENDER, -1, ownerAccTxnsList)
                     tmpEncode = tmpGenesisAccTxns.Encode()
                     if hash(tmpEncode) != blockchain.chain[0].get_mTreeRoot():
                         print("VPB检测报错：交易集合哈希错误，节点伪造了创世块中的交易")
@@ -606,7 +606,7 @@ class Account:
 
                 # 检测：ownerAccTxnsList和ownerMTreePrfList的信息是相符的
                 # 注意，这里的Encode()函数只对accTxns进行编码，因此可以设sender='sender'，senderID=None 结果不影响。
-                uncheckedAccTxns = Transaction.AccountTxns(sender='sender', senderID=None, accTxns=ownerAccTxnsList)
+                uncheckedAccTxns = transaction.AccountTxns(sender='sender', senderID=None, accTxns=ownerAccTxnsList)
                 uncheckedMTreePrf = unit.MTreeProof(MTPrfList=ownerMTreePrfList)
                 uncheckedAccTxns.set_digest()
                 accTxnsDigest = uncheckedAccTxns.Digest

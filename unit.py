@@ -2,7 +2,7 @@ import os
 import hashlib
 import random
 import copy
-import Transaction
+import transaction
 import re
 
 class txnsPool:

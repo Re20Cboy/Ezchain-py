@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-#
-
 from bitarray import bitarray
 import mmh3
 

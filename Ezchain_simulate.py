@@ -1,16 +1,16 @@
 import copy
 import matplotlib.pyplot as plt
-import Block
-import Blockchain
-import Message
-import Network
-import Node
+import block
+import blockchain
+import message
+import network
+import node
 from const import *
 import random
 import time
 import numpy as np
-import Account
-import Transaction
+import account
+import transaction
 import unit
 from pympler import asizeof
 import datetime #系统时间作为文件名，防止记录时同文件名覆盖
@@ -23,7 +23,7 @@ class EZsimulate:
         self.blockchain = None
         self.nodeList = []
         self.hashPower = []
-        self.network = Network.Network()
+        self.network = network.Network()
         self.avgTPS = 0
         self.TPSList = [] # 记录每轮的TPS
         self.TxnsNumList = [] # 记录每轮交易的总数
@@ -43,7 +43,7 @@ class EZsimulate:
 
     def random_generate_nodes(self, nodeNum = NODE_NUM):
         for i in range(nodeNum):
-            tmpNode = Node.Node(id = i)
+            tmpNode = node.Node(id = i)
             self.nodeList.append(tmpNode)
             self.hashPower.append(HASH_POWER) #随机设置算力占比
             # 将公钥添加进公钥列表
@@ -53,7 +53,7 @@ class EZsimulate:
 
     def random_generate_accounts(self, accountNum = ACCOUNT_NUM):
         for i in range(accountNum):
-            tmpAccount = Account.Account(ID=i)
+            tmpAccount = account.Account(ID=i)
             tmpAccount.generate_random_account()
             self.accounts.append(tmpAccount)
             # 将公钥添加进公钥列表
@@ -91,7 +91,7 @@ class EZsimulate:
             for txn in tmpAccTxn:
                 tmpVNum = len(txn.Value)
                 thisRoundAllTransValueNum += tmpVNum
-            accountTxns.append(Transaction.AccountTxns(self.accounts[i].addr, i, tmpAccTxn))
+            accountTxns.append(transaction.AccountTxns(self.accounts[i].addr, i, tmpAccTxn))
             self.accounts[i].accTxnsIndex = i # 设置账户对于其提交交易在区块中位置的索引
             accountTxnsRecipientList.append(randomRecipientsIndexList)
         self.transVNumList.append(thisRoundAllTransValueNum)
@@ -106,21 +106,21 @@ class EZsimulate:
                 v_genesis_begin = int(v_genesis_begin, 16) + v_genesis_num*i + 1
                 v_genesis_begin = hex(v_genesis_begin)
             V = unit.Value(beginIndex=v_genesis_begin, valueNum=v_genesis_num)
-            Txn = Transaction.Transaction(sender=GENESIS_SENDER, recipient=self.accounts[i].addr,
+            Txn = transaction.Transaction(sender=GENESIS_SENDER, recipient=self.accounts[i].addr,
                                                          nonce=0, signature='GENESIS_SIG', value=V,
                                                          tx_hash=0, time=0)
             genesisAccTxns.append(Txn)
         # 生成创世块
-        GAccTxns = Transaction.AccountTxns(sender=GENESIS_SENDER, senderID=None, accTxns=genesisAccTxns)
+        GAccTxns = transaction.AccountTxns(sender=GENESIS_SENDER, senderID=None, accTxns=genesisAccTxns)
         encodedGAccTxns = [GAccTxns.Encode()]
         preBlockHash = '0x7777777'
         blockIndex = 0
         genesisMTree = unit.MerkleTree(encodedGAccTxns, isGenesisBlcok=True)
         mTreeRoot = genesisMTree.getRootHash()
-        genesisBlock = Block.Block(index=blockIndex, mTreeRoot = mTreeRoot, miner = GENESIS_MINER_ID, prehash = preBlockHash)
+        genesisBlock = block.Block(index=blockIndex, mTreeRoot = mTreeRoot, miner = GENESIS_MINER_ID, prehash = preBlockHash)
 
         # 将创世块加入区块链中
-        self.blockchain = Blockchain.Blockchain(genesisBlock)
+        self.blockchain = blockchain.Blockchain(genesisBlock)
         # 生成每个创世块中的proof
         for count, acc in enumerate(self.accounts, start=0):
             tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=GAccTxns.AccTxns ,ownerMTreePrfList=[genesisMTree.root.value])
@@ -132,7 +132,7 @@ class EZsimulate:
         pass
 
     def generate_block_body(self):
-        new_block_body = Message.BlockBodyMsg()
+        new_block_body = message.BlockBodyMsg()
         DigestAccTxns = []
         for item in self.txnsPool.pool:
             DigestAccTxns.append(item[0])

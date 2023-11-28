@@ -1,7 +1,7 @@
 import time
 import sys
 
-import Message
+import message
 from const import *
 import numpy as np
 import random
@@ -53,11 +53,11 @@ class Network:
             return delay, max(delay)
 
         delayList, broadcast_time = recursive_broadcast(nodeID, 0)
-        if type(msg) == Message.BlockMsg:
+        if type(msg) == message.BlockMsg:
             for index, delay in enumerate(delayList, start=0):
                 if delay != 0:
                     nodeList[index].blockBrdCostedTime.append(delay)
-        elif type(msg) == Message.BlockBodyMsg:
+        elif type(msg) == message.BlockBodyMsg:
             for index, delay in enumerate(delayList, start=0):
                 if delay != 0:
                     nodeList[index].blockBodyBrdCostedTime.append(delay)

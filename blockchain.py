@@ -1,11 +1,11 @@
-import Block
+import block
 import hashlib
 
 class Blockchain:
     def __init__(self, GenesisBlock = None):
         self.chain = []  # List to store blocks in the blockchain
         if GenesisBlock is None:
-            GenesisBlock = Block.Block(index=0, mTreeRoot=hash(0), miner=0, prehash=hash(0))
+            GenesisBlock = block.Block(index=0, mTreeRoot=hash(0), miner=0, prehash=hash(0))
         self.chain.append(GenesisBlock)
 
     def add_block(self, block):

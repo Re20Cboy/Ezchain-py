@@ -1,5 +1,6 @@
 import unittest
-from Bloom import BloomFilter
+from bloom import BloomFilter
+from block import Block
 
 class TestBloomFilter(unittest.TestCase):
     def setUp(self):
@@ -27,6 +28,41 @@ class TestBloomFilter(unittest.TestCase):
         expected_false_positive_rate = 0.01  # Adjust based on your requirements
         actual_false_positive_rate = false_positives / 1000
         self.assertLessEqual(actual_false_positive_rate, expected_false_positive_rate)
+
+class TestBlock(unittest.TestCase):
+
+    def setUp(self):
+        # Initialize a Block instance for testing
+        self.block = Block(index=1, mTreeRoot="root", miner="miner_id", prehash="000000")
+
+    def test_block_creation(self):
+        # Test if the block is created with the correct attributes
+        self.assertEqual(self.block.index, 1)
+        self.assertEqual(self.block.mTreeRoot, "root")
+        self.assertEqual(self.block.miner, "miner_id")
+        self.assertEqual(self.block.preHash, "000000")
+        # Additional checks for other attributes can be added here
+
+    def test_block_to_string(self):
+        # Test if the block's string representation is correct
+        block_str = self.block.block2str()
+        self.assertIn("Index: 1", block_str)
+        self.assertIn("Merkle Tree Root: root", block_str)
+        # Additional checks for the string representation of other attributes
+
+    def test_bloom_filter_integration(self):
+        # Test the integration of the Bloom Filter in the block
+        # Ensure that an item can be added and checked within the Bloom Filter
+        item = "test_item"
+        self.block.add_item_2_bloom(item)
+        self.assertTrue(self.block.is_in_bloom(item))
+        self.assertFalse(self.block.is_in_bloom("nonexistent_item"))
+
+    def test_block_hash(self):
+        # Test if the hash of the block is generated correctly
+        block_hash = self.block.get_hash()
+        self.assertIsNotNone(block_hash)
+        # Further checks can be added to verify the format of the generated hash
 
 if __name__ == '__main__':
     unittest.main()
