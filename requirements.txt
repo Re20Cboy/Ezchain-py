@@ -1,7 +1,7 @@
 bitarray==2.8.3
 cffi==1.16.0
 contourpy==1.1.1
-cryptography==41.0.5
+cryptography==41.0.6
 cycler==0.12.1
 fonttools==4.44.3
 importlib-resources==6.1.1
