@@ -41,3 +41,10 @@ These are some critical configuration options in the project, which can be modif
 ```
 python3 Ezchain_simulate.py
 ```
+
+or
+
+```
+chmod +x Ezchain_simulate.py
+./Ezchain_simulate.py
+```

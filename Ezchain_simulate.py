@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import copy
 import matplotlib.pyplot as plt
 import block
