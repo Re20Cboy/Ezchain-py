@@ -118,8 +118,8 @@ class EZsimulate:
         preBlockHash = '0x7777777'
         blockIndex = 0
         genesisMTree = unit.MerkleTree(encodedGAccTxns, isGenesisBlcok=True)
-        mTreeRoot = genesisMTree.getRootHash()
-        genesisBlock = block.Block(index=blockIndex, mTreeRoot = mTreeRoot, miner = GENESIS_MINER_ID, prehash = preBlockHash)
+        m_tree_root = genesisMTree.getRootHash()
+        genesisBlock = block.Block(index=blockIndex, m_tree_root = m_tree_root, miner = GENESIS_MINER_ID, pre_hash = preBlockHash)
 
         # 将创世块加入区块链中
         self.blockchain = blockchain.Blockchain(genesisBlock)

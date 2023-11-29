@@ -5,7 +5,7 @@ class Blockchain:
     def __init__(self, GenesisBlock = None):
         self.chain = []  # List to store blocks in the blockchain
         if GenesisBlock is None:
-            GenesisBlock = block.Block(index=0, mTreeRoot=hash(0), miner=0, prehash=hash(0))
+            GenesisBlock = block.Block(index=0, m_tree_root=hash(0), miner=0, pre_hash=hash(0))
         self.chain.append(GenesisBlock)
 
     def add_block(self, block):
@@ -21,7 +21,7 @@ class Blockchain:
         for i in range(1, len(self.chain)):
             current_block = self.chain[i]
             previous_block = self.chain[i - 1]
-            if current_block.preHash != previous_block.get_hash():
+            if current_block.pre_hash != previous_block.get_hash():
                 return False
         return True
 
@@ -32,10 +32,10 @@ class Blockchain:
             print(f"Timestamp: {block.time}")
             print(f"Miner: {block.miner}")
             if block.index != 0:
-                print(f"Previous Hash: {block.preHash.hexdigest()}")
+                print(f"Previous Hash: {block.pre_hash.hexdigest()}")
             else:
-                print(f"Previous Hash: {block.preHash}")
-            print(f"Merkle Tree Root: {block.mTreeRoot}")
+                print(f"Previous Hash: {block.pre_hash}")
+            print(f"Merkle Tree Root: {block.m_tree_root}")
             print(f"Nonce: {block.nonce}")
             print(f"Bloom Filter Size: {len(block.bloom)}")
             print(f"Signature: {block.sig}")

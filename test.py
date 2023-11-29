@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import unittest
 from bloom import BloomFilter
 from block import Block
@@ -33,19 +35,19 @@ class TestBlock(unittest.TestCase):
 
     def setUp(self):
         # Initialize a Block instance for testing
-        self.block = Block(index=1, mTreeRoot="root", miner="miner_id", prehash="000000")
+        self.block = Block(index=1, m_tree_root="root", miner="miner_id", pre_hash="000000")
 
     def test_block_creation(self):
         # Test if the block is created with the correct attributes
         self.assertEqual(self.block.index, 1)
-        self.assertEqual(self.block.mTreeRoot, "root")
+        self.assertEqual(self.block.m_tree_root, "root")
         self.assertEqual(self.block.miner, "miner_id")
-        self.assertEqual(self.block.preHash, "000000")
+        self.assertEqual(self.block.pre_hash, "000000")
         # Additional checks for other attributes can be added here
 
     def test_block_to_string(self):
         # Test if the block's string representation is correct
-        block_str = self.block.block2str()
+        block_str = self.block.block_to_str()
         self.assertIn("Index: 1", block_str)
         self.assertIn("Merkle Tree Root: root", block_str)
         # Additional checks for the string representation of other attributes
@@ -54,7 +56,7 @@ class TestBlock(unittest.TestCase):
         # Test the integration of the Bloom Filter in the block
         # Ensure that an item can be added and checked within the Bloom Filter
         item = "test_item"
-        self.block.add_item_2_bloom(item)
+        self.block.add_item_to_bloom(item)
         self.assertTrue(self.block.is_in_bloom(item))
         self.assertFalse(self.block.is_in_bloom("nonexistent_item"))
 

@@ -5,49 +5,81 @@ import unit
 import hashlib
 
 class Block:
-    def __init__(self, index, mTreeRoot, miner, prehash, nonce = 0, bloomsize = 1024*1024, bloomhashcount = 5, time = datetime.datetime.now()):
+    def __init__(self, index, m_tree_root, miner, pre_hash, nonce=0, bloom_size=1024*1024, bloom_hash_count=5, time=None):
+        """
+        Initialize a new block in the blockchain.
+
+        Args:
+            index (int): The index of the block in the blockchain.
+            m_tree_root (str): The root of the Merkle Tree for this block.
+            miner (str): The ID of the miner who mined this block.
+            pre_hash (str): The hash of the previous block in the chain.
+            nonce (int): The nonce used in the mining process. Defaults to 0.
+            bloom_size (int): The size of the Bloom filter. Defaults to 1024*1024.
+            bloom_hash_count (int): The number of hash functions for the Bloom filter. Defaults to 5.
+            time (datetime): The timestamp when the block is created. Defaults to current time.
+        """
         self.index = index
         self.nonce = nonce
-        self.bloom = bloom.BloomFilter(bloomsize, bloomhashcount)
-        self.mTreeRoot = mTreeRoot
-        self.time = datetime.datetime.now() #创建此区块时的时间戳
-        self.miner = miner # 这里的miner是miner的id
-        self.preHash = prehash
-        self.sig = unit.generate_signature(miner) #数字签名待实现
+        self.bloom = bloom.BloomFilter(bloom_size, bloom_hash_count)
+        self.m_tree_root = m_tree_root
+        self.time = time if time is not None else datetime.datetime.now()
+        self.miner = miner
+        self.pre_hash = pre_hash
+        self.sig = unit.generate_signature(miner)  # Digital signature implementation pending
 
-    def block2str(self): # 将区块转译为字符串方便进行hash摘要、签名等操作，固此字符串转译中不能有签名加入。
+    def block_to_str(self):
+        """
+        Convert the block into a string representation for hashing and signing.
+        The signature is not included in this representation.
+
+        Returns:
+            str: The string representation of the block.
+        """
         block_str = f"Index: {self.index}\n"
         block_str += f"Nonce: {self.nonce}\n"
         block_str += f"Bloom: {str(self.bloom)}\n"
-        block_str += f"Merkle Tree Root: {self.mTreeRoot}\n"
+        block_str += f"Merkle Tree Root: {self.m_tree_root}\n"
         block_str += f"Time: {str(self.time)}\n"
         block_str += f"Miner: {self.miner}\n"
-        block_str += f"Previous Hash: {self.preHash}\n"
+        block_str += f"Previous Hash: {self.pre_hash}\n"
         return block_str
 
+    # Getter methods
     def get_index(self):
         return self.index
+
     def get_nonce(self):
         return self.nonce
+
     def get_bloom(self):
         return self.bloom
-    def get_mTreeRoot(self):
-        return self.mTreeRoot
+
+    def get_m_tree_root(self):
+        return self.m_tree_root
+
     def get_time(self):
         return self.time
+
     def get_miner(self):
         return self.miner
-    def get_preHash(self):
-        return self.preHash
+
+    def get_pre_hash(self):
+        return self.pre_hash
+
     def get_sig(self):
         return self.sig
+
     def get_hash(self):
-        return hashlib.sha256(self.block2str().encode("utf-8"))
-    def add_item_2_bloom(self, item):
+        """Calculate and return the hash of the block."""
+        return hashlib.sha256(self.block_to_str().encode("utf-8")).hexdigest()
+
+    def add_item_to_bloom(self, item):
+        """Add an item to the block's Bloom filter."""
         self.bloom.add(item)
+
     def is_in_bloom(self, item):
-        if item in self.bloom:
-            return True
-        else:
-            return False
+        """Check if an item is in the block's Bloom filter."""
+        return item in self.bloom
+
 

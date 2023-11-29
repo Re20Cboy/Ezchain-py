@@ -399,7 +399,7 @@ class Account:
             accTxnsDigest = uncheckedAccTxns.Digest
             # 检测：ownerMTreePrfList和主链此块中的root是相符的
             if not uncheckedMTreePrf.checkPrf(accTxnsDigest=accTxnsDigest,
-                                            trueRoot=blockchain.chain[blockIndex[index]].get_mTreeRoot()):
+                                            trueRoot=blockchain.chain[blockIndex[index]].get_m_tree_root()):
                 print("VPB检测报错：默克尔树检测未通过")
                 return False  # 默克尔树检测未通过，固错误！
 
@@ -570,10 +570,10 @@ class Account:
                 ownerAccTxnsList = prfUnit.ownerAccTxnsList
                 ownerMTreePrfList = prfUnit.ownerMTreePrfList
                 # 创世块的检测
-                if ownerMTreePrfList == [blockchain.chain[0].get_mTreeRoot()]:  # 说明这是创世块
+                if ownerMTreePrfList == [blockchain.chain[0].get_m_tree_root()]:  # 说明这是创世块
                     tmpGenesisAccTxns = transaction.AccountTxns(GENESIS_SENDER, -1, ownerAccTxnsList)
                     tmpEncode = tmpGenesisAccTxns.Encode()
-                    if hash(tmpEncode) != blockchain.chain[0].get_mTreeRoot():
+                    if hash(tmpEncode) != blockchain.chain[0].get_m_tree_root():
                         print("VPB检测报错：交易集合哈希错误，节点伪造了创世块中的交易")
                         return False  # 树根值错误，说明节点伪造了创世块中的交易。
                     # 检测此value是否在创世块中且持有者是创世块中的接收者：
@@ -611,7 +611,7 @@ class Account:
                 uncheckedAccTxns.set_digest()
                 accTxnsDigest = uncheckedAccTxns.Digest
                 # 检测：ownerMTreePrfList和主链此块中的root是相符的
-                if not uncheckedMTreePrf.checkPrf(accTxnsDigest=accTxnsDigest, trueRoot=blockchain.chain[blockIndex[index]].get_mTreeRoot()):
+                if not uncheckedMTreePrf.checkPrf(accTxnsDigest=accTxnsDigest, trueRoot=blockchain.chain[blockIndex[index]].get_m_tree_root()):
                     print("VPB检测报错：默克尔树检测未通过")
                     return False # 默克尔树检测未通过，固错误！
 
