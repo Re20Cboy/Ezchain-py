@@ -1,28 +1,54 @@
-# TNX_CSV_PATH = 'D:/EZchain-V2/Ezchain-py/300Txs.csv'
-TNX_CSV_NUM = 300 #csv文件中交易的总数量
+# Total number of transactions in the CSV file
+TNX_CSV_NUM = 300
 
-SAMPLE_NEIGHBORS_NUM = 30 #随机链接的邻居节点的数量
+# Number of randomly connected neighbor nodes
+SAMPLE_NEIGHBORS_NUM = 30
 
-NODE_ACCOUNT_DELAY = 1.5 # node和acc之间的延迟
-ACC_ACC_DELAY = 1.5 # acc和acc之间的延迟
+# Delay between node and account (in seconds)
+NODE_ACCOUNT_DELAY = 1.5
 
-NODE_NUM = 70 #模拟节点的数量
-ACCOUNT_NUM = 120 #模拟账户数量
+# Delay between accounts (in seconds)
+ACC_ACC_DELAY = 1.5
 
-PICK_TXNS_NUM = int(ACCOUNT_NUM*ACCOUNT_NUM / 2) #一次打包的交易的数量，理论上不应当超过 ACCOUNT_NUM^2 / 2 （/2是因为随机时最少有ACCOUNT_NUM/ 2个账户参与交易）
+# Number of simulated nodes
+NODE_NUM = 70
 
-SIMULATE_ROUND = 4 # 挖矿轮数
+# Number of simulated accounts
+ACCOUNT_NUM = 120
 
-BANDWIDTH = 1024 * 1024 * 1 #网络带宽
-HASH_DIFFICULTY = 0.0005 #挖矿难度，即，一次hash运算挖矿成功的概率
-HASH_POWER = 100 #哈希算力，表示每秒钟执行的hash次数
+# Number of transactions to package at once, theoretically should not exceed ACCOUNT_NUM^2 / 2
+# (/2 because at least ACCOUNT_NUM/2 accounts participate in transactions randomly)
+PICK_TXNS_NUM = int(ACCOUNT_NUM * ACCOUNT_NUM / 2)
 
+# Number of mining rounds
+SIMULATE_ROUND = 4
+
+# Network bandwidth (bytes)
+BANDWIDTH = 1024 * 1024 * 1
+
+# Mining difficulty, i.e., the probability of successful mining in one hash operation
+HASH_DIFFICULTY = 0.0005
+
+# Hash power, indicating the number of hash operations per second
+HASH_POWER = 100
+
+# Number of rounds for fork simulation
 FORK_SIMULATE_ROUND = 100
 
+# Genesis block sender address
 GENESIS_SENDER = '0x259'
+
+# Genesis block miner ID
 GENESIS_MINER_ID = -1
 
+# Path to store node private keys
 NODE_PRIVATE_KEY_PATH = "node_private_key/"
+
+# Path to store node public keys
 NODE_PUBLIC_KEY_PATH = "node_public_key/"
+
+# Path to store account private keys
 ACCOUNT_PRIVATE_KEY_PATH = "account_private_key/"
+
+# Path to store account public keys
 ACCOUNT_PUBLIC_KEY_PATH = "account_public_key/"
