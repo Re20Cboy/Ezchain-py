@@ -1,7 +1,7 @@
 import hashlib
 import pickle
 import datetime
-# 签名所需引用
+
 import string
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
@@ -13,13 +13,14 @@ class AccountTxns:
         self.SenderID = senderID
         # self.AccTxnsHash = None
         self.AccTxns = accTxns
-        self.time = str(datetime.datetime.now()) # 记录时间戳
+        self.time = str(datetime.datetime.now()) # Record the timestamp
         self.Signature = None
         self.Digest = None
 
-    def Encode(self): # 这里encode的只有真正的txn的list
+    def Encode(self): # Here only the actual txn list is encoded
         encoded_tx = pickle.dumps(self.AccTxns)
         return encoded_tx
+
     @staticmethod
     def Decode(to_decode):
         decoded_tx = pickle.loads(to_decode)
@@ -35,31 +36,27 @@ class AccountTxns:
         digest = hash(self.Encode())
         self.Digest = digest
 
-    def sig_accTxn(self, load_private_key): # accTxn的摘要信息在签名时赋值
+    def sig_accTxn(self, load_private_key): # The digest information of accTxn is assigned during signing
         def hash(val):
-            # return hashlib.sha256(val.encode("utf-8")).hexdigest()
             if type(val) == str:
                 return hashlib.sha256(val.encode("utf-8")).hexdigest()
             else:
                 return hashlib.sha256(val).hexdigest()
         private_key = load_pem_private_key(load_private_key, password=None)
-        # 使用SHA256哈希算法计算区块的哈希值
-        #block_hash = hashes.Hash(hashes.SHA256())
-        #block_hash.update(self.Encode())
-        #digest = block_hash.finalize()
+        # Calculate the hash of the block using the SHA256 hash algorithm
         digest = hash(self.Encode())
-        digestBytes = digest.encode('utf-8')
+        digest_bytes = digest.encode('utf-8')
         self.Digest = digest
         signature_algorithm = ec.ECDSA(hashes.SHA256())
-        # 对区块哈希值进行签名
-        signature = private_key.sign(data=digestBytes, signature_algorithm=signature_algorithm)
+        # Sign the block hash value
+        signature = private_key.sign(data=digest_bytes, signature_algorithm=signature_algorithm)
         self.Signature = signature
 
     def check_accTxn_sig(self, load_public_key):
         public_key = load_pem_public_key(load_public_key)
         digest = self.Digest
         signature_algorithm = ec.ECDSA(hashes.SHA256())
-        # 验证签名
+        # Verify the signature
         try:
             public_key.verify(
                 self.Signature,
@@ -69,6 +66,7 @@ class AccountTxns:
             return True
         except:
             return False
+
 
 
 class Transaction:
@@ -91,28 +89,26 @@ class Transaction:
         return txn_str
 
     def sig_txn(self, load_private_key):
-        # 从私钥路径加载私钥
-        # with open(load_private_key_path, "rb") as key_file:
+        # Load private key from the private key path
         private_key = load_pem_private_key(load_private_key, password=None)
-        # 使用SHA256哈希算法计算区块的哈希值
+        # Calculate the hash of the block using the SHA256 hash algorithm
         block_hash = hashes.Hash(hashes.SHA256())
         block_hash.update(self.txn2str().encode('utf-8'))
         digest = block_hash.finalize()
         signature_algorithm = ec.ECDSA(hashes.SHA256())
-        # 对区块哈希值进行签名
+        # Sign the block hash value
         signature = private_key.sign(data=digest, signature_algorithm=signature_algorithm)
         self.Signature = signature
 
     def check_txn_sig(self, load_public_key):
-        # 从公钥路径加载公钥
-        # with open(load_public_key_path, "rb") as key_file:
+        # Load public key from the public key path
         public_key = load_pem_public_key(load_public_key)
-        # 使用SHA256哈希算法计算区块的哈希值
+        # Calculate the hash of the block using the SHA256 hash algorithm
         block_hash = hashes.Hash(hashes.SHA256())
         block_hash.update(self.txn2str().encode('utf-8'))
         digest = block_hash.finalize()
         signature_algorithm = ec.ECDSA(hashes.SHA256())
-        # 验证签名
+        # Verify the signature
         try:
             public_key.verify(
                 self.Signature,
@@ -151,23 +147,19 @@ class Transaction:
         encoded_tx = tx.Encode()
         tx_hash = hashlib.sha256(encoded_tx).digest()
         tx.TxHash = tx_hash
-        #tx.Relayed = False
-        #tx.FinalRecipient = ""
-        #tx.OriginalSender = ""
-        #tx.RawTxHash = None
-        #tx.HasBroker = False
-        #tx.SenderIsBroker = False
         return tx
 
-    def count_value_intersect_txn(self, value): # 计算value值的任意子集在此交易中被转移的总次数
-        count = 0 # 用于计数有多少个与此value有交集的交易
+    def count_value_intersect_txn(self, value):
+        # Calculate the total number of transactions that intersect with a given value subset
+        count = 0  # Counter for the number of transactions intersecting with this value
         for V in self.Value:
             if V.isIntersectValue(value):
                 count += 1
         return count
 
-    def count_value_in_value(self, value): # 检测value是否完整地（作为完全相同的值或者被包含在一个更大的值内）在此交易中被转移仅一次
-        count = 0  # 用于计数
+    def count_value_in_value(self, value):
+        # Check if the value is completely transferred only once in this transaction (either as the same value or contained within a larger value)
+        count = 0  # Counter for the number of transactions
         for V in self.Value:
             if V.isInValue(value):
                 count += 1
