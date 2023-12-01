@@ -14,10 +14,12 @@ Our prototype experiment demonstrates that under typical daily bandwidth network
 
 ### Environment setup
 
-```
-git clone xxx.git
+Python 3.8 or higher.
 
-cd xxx
+```
+git clone https://github.com/Re20Cboy/Ezchain-py.git
+
+cd Ezchain
 
 pip install -r requirements.txt
 ```
@@ -46,6 +48,5 @@ python3 Ezchain_simulate.py
 or
 
 ```
-chmod +x Ezchain_simulate.py
 ./Ezchain_simulate.py
 ```
