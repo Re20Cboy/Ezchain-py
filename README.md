@@ -6,6 +6,15 @@ Our prototype experiment demonstrates that under typical daily bandwidth network
 ## arXiv: 
 https://arxiv.org/abs/2312.00281
 
+@misc{xue2023scaleout,
+    title={A Scale-out Decentralized Blockchain Ledger System for Web3.0},
+    author={Lide Xue and Wei Yang and Wei Li},
+    year={2023},
+    eprint={2312.00281},
+    archivePrefix={arXiv},
+    primaryClass={cs.CR}
+}
+
 ## Highlights
 
 * Scalability: System throughput is directly proportional to node size, not constrained by bandwidth resources.
