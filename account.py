@@ -499,27 +499,27 @@ class Account:
 
 
     def check_VPBpair(self, VPBpair, bloomPrf, blockchain):
-        # 先检测check point，若有无需检测的vpb则直接跳过
+        # First check the checkpoint; if there are VPBs that don't need to be checked, skip directly
         ckList = self.VPBCheckPoints.findCKviaVPB(VPBpair)
         passIndexList = None
         CKOwner = None
-        if ckList != []: # 找到了对应的check point
+        if ckList != []:  # Found the corresponding checkpoint
             ckOwner, ckBIndex = ckList[0]
-            flagIndex = None # CK记录到了VPB的哪一位
-            for index, item in enumerate(VPBpair[2],start=0):
+            flagIndex = None  # Indicates up to which position in VPB is recorded by CK
+            for index, item in enumerate(VPBpair[2], start=0):
                 if item == ckBIndex[-1]:
                     flagIndex = index
             if flagIndex == None:
-                raise ValueError('VPB检测报错：此VPB与检查点记录有冲突！')
+                raise ValueError('VPB check error: Conflict between this VPB and checkpoint record!')
             VPBOwner = VPBpair[1].prfList[flagIndex].owner
             if VPBOwner != ckOwner:
-                raise ValueError('VPB检测报错：此VPB与检查点记录有冲突！')
-            passIndexList = list(range(flagIndex+1))
+                raise ValueError('VPB check error: Conflict between this VPB and checkpoint record!')
+            passIndexList = list(range(flagIndex + 1))
             CKOwner = ckOwner
 
-        # 统计验证消耗
-        PrfSize = (asizeof.asizeof(VPBpair) + asizeof.asizeof(bloomPrf)) * 8 # *8转换为以bit为单位
-        # 记录程序开始时间
+        # Calculate verification cost
+        PrfSize = (asizeof.asizeof(VPBpair) + asizeof.asizeof(bloomPrf)) * 8  # *8 to convert to bit unit
+        # Record program start time
         check_start_time = time.time()
 
         def hash(val):
@@ -529,178 +529,175 @@ class Account:
                 return hashlib.sha256(val).hexdigest()
 
         ##############################
-        ######## 1 检测数据类型：########
+        ######## 1 Check data type: ########
         ##############################
         if type(VPBpair[0]) != unit.Value or type(VPBpair[1]) != unit.Proof or type(VPBpair[2]) != list:
-            print("VPB检测报错：数据结构错误")
-            return False # 数据结构错误
+            print("VPB check error: Data structure error")
+            return False  # Data structure error
 
         value = VPBpair[0]
         valuePrf = VPBpair[1].prfList
         blockIndex = VPBpair[2]
 
         if len(valuePrf) != len(blockIndex):
-            print("VPB检测报错：证据和块索引非一一映射")
-            return False # 证据和块索引非一一映射，固错误
+            print("VPB check error: Evidence and block index not one-to-one mapping")
+            return False  # Evidence and block index not one-to-one mapping, hence error
 
         ##############################
-        ######## 2 检测value的结构合法性：
+        ######## 2 Check the structural legality of value: ########
         ##############################
         if not value.checkValue:
-            print("VPB检测报错：value的结构合法性检测不通过")
-            return False # value的结构合法性检测不通过
-
-
-
+            print("VPB check error: Value structure legality check failed")
+            return False  # Value structure legality check failed
 
         if passIndexList:
             return self.check_pass_VPBpair(VPBpair, bloomPrf, blockchain, passIndexList, CKOwner, check_start_time)
 
+        recordOwner = None  # This variable is used to record the owner of value transfer
+        epochRealBList = []  # Records the real B information within the epoch, used to compare with B in VPB
+        BList = []  # Records the B information of VPB within each epoch, structured as: [(owner, [list of block index]), (...), (...), ...] for comparison and verification
+        oneEpochBList = []  # Structure: [list of block index]
+        epochChangeList = []  # Records the block number at the time of epoch change
 
-
-
-        recordOwner = None # 此变量用于记录值流转的持有者
-        epochRealBList = [] # 记录epoch内的真实的B的信息，用于和VPB中的B进行对比
-        BList = [] # 记录epoch内的VPB的B的信息，结构为：[(owner,[list of block index]), (...), (...), ...]用于进行对比验证
-        oneEpochBList = [] # 结构为：[list of block index]
-        epochChangeList = [] # 记录epoch变化时的区块号
 
         ##############################
-        ######## 3 检验proof的正确性 ###
+        ######## 3 Check the correctness of proof ###
         ##############################
         for index, prfUnit in enumerate(valuePrf, start=0):
-            # 由于第一个prfUnit是创世块中的交易因此需要特殊的验证处理
-            if index == 0: # 说明是创世块
+            # Since the first prfUnit is a transaction in the genesis block, it needs special verification
+            if index == 0: # Indicates it's the genesis block
                 recordOwner = prfUnit.owner
                 ownerAccTxnsList = prfUnit.ownerAccTxnsList
                 ownerMTreePrfList = prfUnit.ownerMTreePrfList
-                # 创世块的检测
-                if ownerMTreePrfList == [blockchain.chain[0].get_m_tree_root()]:  # 说明这是创世块
+                # Detection of the genesis block
+                if ownerMTreePrfList == [blockchain.chain[0].get_m_tree_root()]:  # Indicates this is the genesis block
                     tmpGenesisAccTxns = transaction.AccountTxns(GENESIS_SENDER, -1, ownerAccTxnsList)
                     tmpEncode = tmpGenesisAccTxns.Encode()
                     if hash(tmpEncode) != blockchain.chain[0].get_m_tree_root():
-                        print("VPB检测报错：交易集合哈希错误，节点伪造了创世块中的交易")
-                        return False  # 树根值错误，说明节点伪造了创世块中的交易。
-                    # 检测此value是否在创世块中且持有者是创世块中的接收者：
+                        print("VPB detection error: Transaction set hash error, node forged transactions in the genesis block")
+                        return False  # Root value error, indicates node forged transactions in the genesis block.
+                    # Check if this value is in the genesis block and the holder is the recipient in the genesis block:
                     for genesisTxn in ownerAccTxnsList:
                         if genesisTxn.Recipient == recordOwner:
                             if not genesisTxn.Value.isInValue(value):
-                                print("VPB检测报错：此值溯源到创世块中发现为非法值")
+                                print("VPB detection error: This value traced back to the genesis block is found to be illegal")
                                 return False
                 else:
-                    print("VPB检测报错：proof中创世块树根检测错误")
+                    print("VPB detection error: Genesis block tree root check error in proof")
                     return False
                 oneEpochBList.append(blockIndex[index])
-
-            else: # 非创世块检测
+        
+            else: # Non-genesis block detection
                 isNewEpoch = False
                 oneEpochBList.append(blockIndex[index])
-                tmpSender = None # 记录每个epoch变更时的交易的发送者，以便验证bloom
-                if recordOwner != prfUnit.owner: # 说明 owner 已改变，该值进入下一个owner持有的epoch
+                tmpSender = None # Record the sender of the transaction at each epoch change for bloom verification
+                if recordOwner != prfUnit.owner: # Indicates the owner has changed, this value enters the next epoch held by the new owner
                     isNewEpoch = True
-                    lastBlockIndex = oneEpochBList.pop() # 获得最后一个交易的区块号
-                    # 更新epoch内的VPB的B的信息
+                    lastBlockIndex = oneEpochBList.pop() # Get the block number of the last transaction
+                    # Update the B information of VPB within the epoch
                     BList.append((copy.deepcopy(recordOwner), copy.deepcopy(oneEpochBList)))
-                    oneEpochBList = [lastBlockIndex] # 为下一段证明保留最初的交易所在的区块号
+                    oneEpochBList = [lastBlockIndex] # Reserve the block number of the initial transaction for the next proof segment
                     epochChangeList.append(lastBlockIndex)
                     tmpSender = recordOwner
-                    recordOwner = prfUnit.owner  # 更新持有者信息
-
+                    recordOwner = prfUnit.owner  # Update owner information
+        
                 ownerAccTxnsList = prfUnit.ownerAccTxnsList
                 ownerMTreePrfList = prfUnit.ownerMTreePrfList
-
-                # 检测：ownerAccTxnsList和ownerMTreePrfList的信息是相符的
-                # 注意，这里的Encode()函数只对accTxns进行编码，因此可以设sender='sender'，senderID=None 结果不影响。
+        
+                # Check: Information of ownerAccTxnsList and ownerMTreePrfList matches
+                # Note, here the Encode() function only encodes accTxns, so you can set sender='sender', senderID=None without affecting the result.
                 uncheckedAccTxns = transaction.AccountTxns(sender='sender', senderID=None, accTxns=ownerAccTxnsList)
                 uncheckedMTreePrf = unit.MTreeProof(MTPrfList=ownerMTreePrfList)
                 uncheckedAccTxns.set_digest()
                 accTxnsDigest = uncheckedAccTxns.Digest
-                # 检测：ownerMTreePrfList和主链此块中的root是相符的
+                # Check: ownerMTreePrfList and the root of this block in the main chain match
                 if not uncheckedMTreePrf.checkPrf(accTxnsDigest=accTxnsDigest, trueRoot=blockchain.chain[blockIndex[index]].get_m_tree_root()):
-                    print("VPB检测报错：默克尔树检测未通过")
-                    return False # 默克尔树检测未通过，固错误！
-
+                    print("VPB detection error: Merkle tree check failed")
+                    return False # Merkle tree check failed, therefore error!
+        
                 if isNewEpoch:
-                    # 所有txn中应当有且仅有一个交易将值转移到新的owner手中
-                    SpendValueTxnList = [] # 记录在此accTxns中此值被转移的所有交易，合法的情况下，此list的长度应为1
+                    # All txns should have exactly one transaction transferring the value to the new owner
+                    SpendValueTxnList = [] # Records all transactions transferring this value in this accTxns, legally this list should have a length of 1
                     for txn in ownerAccTxnsList:
                         count = txn.count_value_in_value(value)
-                        if count == 1: # =0表示未转移该值，>1则表明在此交易内存在双花
-                            if txn.Sender != txn.Recipient:  # 若不是转移给自己则计入值的花销列表
+                        if count == 1: # =0 indicates the value is not transferred, >1 indicates double spending in this transaction
+                            if txn.Sender != txn.Recipient:  # If it's not transferring to oneself, then add to the value spending list
                                 SpendValueTxnList.append(txn)
                         elif count > 1:
-                            print("VPB检测报错：单个交易内存在双花！")
-                            return False  # 存在双花！或者未转移值给owner！
+                            print("VPB detection error: Double spending in a single transaction!")
+                            return False  # Double spending exists! Or the value is not transferred to the owner!
                     if len(SpendValueTxnList) != 1:
-                        print("VPB检测报错：存在双花！或者未转移值给owner！")
-                        return False # 存在双花！或者未转移值给owner！
+                        print("VPB detection error: Double spending exists! Or the value is not transferred to the owner!")
+                        return False # Double spending exists! Or the value is not transferred to the owner!
                     if tmpSender != None and tmpSender not in blockchain.chain[blockIndex[index]].bloom:
-                        print("VPB检测报错：值转移时的Bloom过滤器检测错误！")
+                        print("VPB detection error: Bloom filter check error during value transfer!")
                         return False
                     if SpendValueTxnList[0].Recipient != recordOwner:
-                        print("VPB检测报错：此值未转移给指定的owner")
-                        return False # 此值未转移给指定的owner
+                        print("VPB detection error: This value is not transferred to the specified owner")
+                        return False # This value is not transferred to the specified owner
                 else:
-                    # 未进入新epoch，即，此值尚未转移给新的owner
+                    # Not entering a new epoch, i.e., this value has not yet been transferred to a new owner
                     for txn in ownerAccTxnsList:
                         if txn.count_value_intersect_txn(value) != 0:
                             if txn.Sender != txn.Recipient:
-                                print("VPB检测报错：此值不应当在此处被提前花费")
-                                return False # 此值不应当在此处被花费！
+                                print("VPB detection error: This value should not be prematurely spent here")
+                                return False # This value should not be spent here!
+
         ##############################
-        # 4 检测：每个epoch内的B和主链上的布隆过滤器的信息是相符的，即，epoch的owner没有在B上撒谎
+        # 4 Check: The information of B in each epoch matches the bloom filter information on the main chain, i.e., the epoch's owner did not lie on B
         ##############################
         if len(BList) != len(epochChangeList):
-            print("VPB检测报错：len(BList) != len(epochChangeList)")
+            print("VPB detection error: len(BList) != len(epochChangeList)")
             return False
         oldEpochFlag = 0
         for index, epochRecord in enumerate(BList, start=0):
             fullEpochBList = range(oldEpochFlag, epochChangeList[index])
             realEpochBlist = []
             (owner, uncheckedBList) = epochRecord
-
+        
             if len(uncheckedBList) < 1:
-                print("VPB检测报错：本段owner持有值没有记录")
-                return False  # 本段owner持有值没有记录，固错误！
-
-            ownerBegin = uncheckedBList[0]  # owner刚拥有该值时的block index
-            ownerEnd = uncheckedBList[-1]  # owner将在下一个区块将此值转移给其他owner，即，最后一个持有此值的block index
+                print("VPB detection error: No record of this owner holding the value")
+                return False  # No record of this owner holding the value, therefore an error!
+        
+            ownerBegin = uncheckedBList[0]  # Block index when the owner first had the value
+            ownerEnd = uncheckedBList[-1]  # Owner will transfer this value to another owner in the next block, i.e., the last block index holding this value
             if ownerEnd < ownerBegin:
-                print("VPB检测报错：owner持有值的区块号记录有误")
-                return False  # owner持有值的区块号记录有误！
-
+                print("VPB detection error: Incorrect block number record for owner holding the value")
+                return False  # Incorrect block number record for owner holding the value!
+        
             for item in fullEpochBList:
                 if owner in blockchain.chain[item].bloom:
                     realEpochBlist.append(item)
-
-            # 不需要检验owner持有的第一个块，因为已在前面检测过
+        
+            # No need to verify the first block of the owner, as it has been checked before
             if len(uncheckedBList) > 0 and uncheckedBList[0] == oldEpochFlag:
                 uncheckedBList.pop(0)
             if len(realEpochBlist) > 0 and realEpochBlist[0] == oldEpochFlag:
                 realEpochBlist.pop(0)
-
+        
             if uncheckedBList != realEpochBlist:
-                # 若不同则需要检测bloom proof，排除被bloom过滤器“误伤”的可能
+                # If different, need to check bloom proof, to exclude the possibility of being "accidentally hit" by the bloom filter
                 if bloomPrf == []:
-                    print("VPB检测报错：没有提供bloom proof")
-                    return False  # 没有提供bloom proof，因此没有误伤，则说明owner提供的值持有记录和真实记录不同，错误！
+                    print("VPB detection error: No bloom proof provided")
+                    return False  # No bloom proof provided, so no accidental hit, therefore, the owner's record of holding the value and the real record differ, error!
                 else:
-                    # todo: 检测bloom proof
+                    # todo: Check bloom proof
                     pass
             oldEpochFlag = epochChangeList[index]
-
-        # 记录程序结束时间
+        
+        # Record program end time
         check_end_time = time.time()
-        # 计算程序运行时间
+        # Calculate program running time
         VerTime = check_end_time - check_start_time
         self.verifyTimeCostList.append(VerTime)
         self.verifyStorageCostList.append(PrfSize)
-
+        
         return True
-
-    def generate_txn_prf_when_use(self, begin_index, end_index): # begin_index, end_index分别表示此txn在本账户手中开始的区块号和结束的区块号
-        # proof = 原证明 + 新生成的证明（在此account时期内的证明）
-        # proof单元的数据结构：（区块号，mTree证明）
-        # 生成new proof（在此account时期内的证明）
-        new_proof = []
-        pass
+        
+        def generate_txn_prf_when_use(self, begin_index, end_index): # begin_index, end_index respectively indicate the block number where this txn starts and ends in this account
+            # proof = Original proof + Newly generated proof (proof within this account period)
+            # Data structure of proof unit: (Block number, mTree proof)
+            # Generate new proof (proof within this account period)
+            new_proof = []
+            pass
+        
