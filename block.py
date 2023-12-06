@@ -3,6 +3,7 @@ import bloom
 import datetime
 import unit
 import hashlib
+import json
 
 class Block:
     def __init__(self, index, m_tree_root, miner, pre_hash, nonce=0, bloom_size=1024*1024, bloom_hash_count=5, time=None):
@@ -44,6 +45,11 @@ class Block:
         block_str += f"Miner: {self.miner}\n"
         block_str += f"Previous Hash: {self.pre_hash}\n"
         return block_str
+
+    def block_to_json(self):
+        return json.dumps(
+            {"index": self.index, "nonce": self.nonce, "bloom": self.bloom, "m_tree_root": self.m_tree_root,
+             "time": self.time, "miner": self.miner, "pre_hash": self.pre_hash, "sig": self.sig}, sort_keys=True).encode()
 
     # Getter methods
     def get_index(self):

@@ -11,17 +11,17 @@ NODE_ACCOUNT_DELAY = 1.5
 ACC_ACC_DELAY = 1.5
 
 # Number of simulated nodes
-NODE_NUM = 70
+NODE_NUM = 5
 
 # Number of simulated accounts
-ACCOUNT_NUM = 120
+ACCOUNT_NUM = 5
 
 # Number of transactions to package at once, theoretically should not exceed ACCOUNT_NUM^2 / 2
 # (/2 because at least ACCOUNT_NUM/2 accounts participate in transactions randomly)
 PICK_TXNS_NUM = int(ACCOUNT_NUM * ACCOUNT_NUM / 2)
 
 # Number of mining rounds
-SIMULATE_ROUND = 4
+SIMULATE_ROUND = 5
 
 # Network bandwidth (bytes)
 BANDWIDTH = 1024 * 1024 * 1
@@ -52,3 +52,6 @@ ACCOUNT_PRIVATE_KEY_PATH = "account_private_key/"
 
 # Path to store account public keys
 ACCOUNT_PUBLIC_KEY_PATH = "account_public_key/"
+
+# compute time of one round hash
+D_ONE_HASH_TIME = 0.01

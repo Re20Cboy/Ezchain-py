@@ -3,6 +3,7 @@
 import unittest
 from bloom import BloomFilter
 from block import Block
+from Distributed_con_node import ConNode
 
 class TestBloomFilter(unittest.TestCase):
     def setUp(self):
@@ -65,6 +66,15 @@ class TestBlock(unittest.TestCase):
         block_hash = self.block.get_hash()
         self.assertIsNotNone(block_hash)
         # Further checks can be added to verify the format of the generated hash
+
+class TestDConNode(unittest.TestCase):
+    def init_con_node(self):
+        # 初始化一些必要的用于test的信息，输入到con node中
+        pass
+    def test_create_new_block_body(self):
+        con_node = ConNode()
+        con_node.create_new_block_body()
+        print(str(con_node.tmpBlockBodyMsg))
 
 if __name__ == '__main__':
     unittest.main()
