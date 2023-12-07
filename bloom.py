@@ -64,3 +64,18 @@ class BloomFilter(set):  # Inherits from the set class
 
         return True  # Item might be in the filter (subject to false positives)
 
+import json
+
+class BloomFilterEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, BloomFilter):
+            return {
+                'size': obj.size,
+                'hash_count': obj.hash_count,
+                'bit_array': list(obj.bit_array),
+                '__class__': obj.__class__.__name__,
+                '__module__': obj.__module__
+            }
+        return json.JSONEncoder.default(self, obj)
+
+

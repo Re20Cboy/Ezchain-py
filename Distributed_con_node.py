@@ -20,6 +20,10 @@ import uuid
 import random
 import blockchain
 import json
+import unit
+import pickle
+from Ezchain_simulate import EZsimulate
+
 
 ANSI_RESET = "\u001B[0m"
 ANSI_RED = "\u001B[31m"
@@ -62,6 +66,9 @@ class NeighborInfo(object):
 
 class ConNode:
     def __init__(self, port=0, new_port=0, node_uuid=0):
+        #####################
+        ## con-node #########
+        #####################
         self.blockchain = Blockchain()
         self.tmpBlockMsg = None # 临时存储的区块信息
         self.tmpBlockBodyMsg = None # 临时存储的区块详细信息（默克尔树格式）
@@ -70,14 +77,19 @@ class ConNode:
         self.privateKey = None # 私钥
         self.publicKey = None # 公钥
         self.addr = None
+        self.txnsPool = unit.txnsPool()  # 用于存放本轮的所有交易
 
-
+        #####################
+        ## record data ######
+        #####################
         self.blockBrdCostedTime = [] # 用于记录广播消耗的时间，最后用于计算tps、区块确认等数据
         self.blockBodyBrdCostedTime = [] # 用于记录广播消耗的时间，最后用于计算tps、区块确认等数据
         self.blockCheckCostedTime = []  # 用于记录验证消耗的时间，最后用于计算tps、区块确认等数据
         self.blockBodyCheckCostedTime = []  # 用于记录验证消耗的时间，最后用于计算tps、区块确认等数据
 
-        # distributed network part
+        #####################
+        # distributed network
+        #####################
         self.port = port
         self.new_port = new_port
         self.node_uuid = get_node_uuid()
@@ -165,8 +177,15 @@ class ConNode:
 
     def create_new_block_body(self):
         blockBody = BlockBodyMsg()
-        blockBody.random_generate_mTree(PICK_TXNS_NUM)
+        DigestAccTxns = []
+        for item in self.txnsPool.pool:
+            DigestAccTxns.append(item[0])
+        blockBody.random_generate_mTree(DigestAccTxns, self.txnsPool.pool)
         self.tmpBlockBodyMsg = blockBody
+        return blockBody
+
+    def set_txnsPool(self, txnPool):
+        self.txnsPool = txnPool
 
     def create_new_block(self, m_tree_root = None):
         # 首先打包交易，形成block body
@@ -208,18 +227,20 @@ class ConNode:
 
         return reconstructed_block
 
+    def get_block_from_pickle(self, pickled_block):
+        return pickle.loads(pickled_block)
+
     def one_round_hash(self):
         time.sleep(self.one_hash_time)
 
     def one_round_mine(self, port_number):
         with self.mining_lock:
-            global no_recv_new_block
-            no_recv_new_block = True
+            self.no_recv_new_block = True
 
             print_yellow('begin mine...')
             mine_count = 0
             mine_flag = random.randint(500, 1000)  # 随机生成mine时间
-            while no_recv_new_block:
+            while self.no_recv_new_block:
                 self.one_round_hash()
                 mine_count += 1
                 if mine_count >= mine_flag:  # 完成一轮挖矿，并广播
@@ -235,15 +256,15 @@ class ConNode:
 
     # Send the broadcast Message Function
     def send_broadcast_thread(self, port_number, new_block):
-        new_block_json = new_block.block_to_json()
+        # new_block_json = new_block.block_to_json()
+        pickled_new_block = new_block.block_to_pickle()
         Message = str(self.node_uuid) + " ON " + str(port_number) + " block: "
         # ip_and_port = server.getsockname()
         Message_V2 = Message.encode("utf-8")
-        encode_block = Message_V2 + new_block_json
+        encode_block = Message_V2 + pickled_new_block
         self.broadcaster.sendto(encode_block, ('255.255.255.255', get_broadcast_port()))
         print_green("msg(new block) is brd.")
         pass
-
 
     # Chef If Node Recieve Itself Function
     def checkIfsameNode(self, message):
@@ -261,10 +282,7 @@ class ConNode:
         launches a thread to connect to new nodes
         and exchange timestamps.
         """
-        global neighbor_information
-        global no_recv_new_block
-        global server
-        self_port = server.getsockname()[1]
+        self_port = self.server.getsockname()[1]
 
         client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         client.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -278,28 +296,27 @@ class ConNode:
             prefix = " block: "
             # 寻找前缀的位置并获取其后面的部分作为 parsed_block_json
             prefix_index = data.find(prefix.encode("utf-8"))
-            parsed_block_json = data[(prefix_index + len(prefix)):].decode("utf-8")
-            block_from_json = self.get_block_from_json(parsed_block_json)
-
+            # parsed_block_json = data[(prefix_index + len(prefix)):].decode("utf-8")
+            # block_from_json = self.get_block_from_json(parsed_block_json)
+            block_from_pickle = self.get_block_from_pickle(data[(prefix_index + len(prefix)):])
             non_block_info = data[:(prefix_index + len(prefix))].decode("utf-8")
             parsed = non_block_info.split(" ")
             newnodeflag = self.checkIfsameNode(parsed)
 
             if(newnodeflag == 1 or newnodeflag == 2):
                 # todo: ver block
-                valid_flag = self.blockchain.is_valid_block(block_from_json)
+                valid_flag = self.blockchain.is_valid_block(block_from_pickle)
                 if valid_flag:
                     print_blue(f'test success, add recv block to chain, FROM: {ip}:{port}.')
                 else:
                     print_red('test fail, ignore recv block, FROM: {ip}:{port}.')
                     continue
 
-                no_recv_new_block = False
-                self.blockchain.add_block(block_from_json)
+                self.no_recv_new_block = False
+                self.blockchain.add_block(block_from_pickle)
                 miner = self.daemon_thread_builder(self.one_round_mine, args=(self_port,))
                 miner.start()
                 # miner.join()
-
 
     # Create Threads Function
     def daemon_thread_builder(self, target, args=()) -> threading.Thread:
@@ -330,7 +347,6 @@ class ConNode:
 ############################################
 ############################################
 
-
 def main():
     print("*" * 50)
     print_red("To terminate this program use: CTRL+C")
@@ -340,7 +356,13 @@ def main():
     time.sleep(0.5)   # Wait a little bit.
 
     con_node = ConNode()
-    con_node.generate_node_info()
+    # init random genesis block
+
+    # set con node's genesis block
+
+    # random generate txn pool
+
+
     con_node.entrypoint()
 
 if __name__ == "__main__":

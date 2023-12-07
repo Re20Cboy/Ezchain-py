@@ -383,7 +383,6 @@ def generate_random_hex(length):
         hex_number += random.choice(hex_digits)
     return hex_number
 
-
 if __name__ == "__main__":
     elems = ['1', '2', '3', '4', '5', '6']
     print('构造树')

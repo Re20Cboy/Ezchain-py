@@ -129,6 +129,7 @@ class EZsimulate:
             tmpPrf = unit.Proof([tmpPrfUnit])
             tmpVPBPair = [genesisAccTxns[count].Value, tmpPrf, [genesisBlock.index]] # V-P-B对
             acc.add_VPBpair(tmpVPBPair)
+        return genesisBlock
 
     def generate_block(self):
         pass

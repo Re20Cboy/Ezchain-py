@@ -4,6 +4,7 @@ import datetime
 import unit
 import hashlib
 import json
+import pickle
 
 class Block:
     def __init__(self, index, m_tree_root, miner, pre_hash, nonce=0, bloom_size=1024*1024, bloom_hash_count=5, time=None):
@@ -29,6 +30,29 @@ class Block:
         self.pre_hash = pre_hash
         self.sig = unit.generate_signature(miner)  # Digital signature implementation pending
 
+    def block_to_json(self):
+        """
+        # encode bloom to json
+        serialized_bloom_filter = json.dumps(self.bloom, cls=bloom.BloomFilterEncoder, indent=4)
+        other_json = json.dumps(
+            {"index": self.index, "nonce": self.nonce, "m_tree_root": self.m_tree_root,
+             "time": self.time, "miner": self.miner, "pre_hash": self.pre_hash, "sig": self.sig}, sort_keys=True).encode()
+        return (other_json, serialized_bloom_filter)
+        """
+        # Create a dictionary to represent the non-byte data
+        other_data = {
+            "index": self.index,
+            "nonce": self.nonce,
+            "m_tree_root": self.m_tree_root,
+            "time": self.time,
+            "miner": self.miner,
+            "pre_hash": self.pre_hash,
+            "sig": self.sig
+        }
+        # Encode the bloom filter to JSON
+        serialized_bloom_filter = json.dumps(self.bloom, cls=bloom.BloomFilterEncoder, indent=4)
+        return (json.dumps(other_data, sort_keys=True), serialized_bloom_filter)
+
     def block_to_str(self):
         """
         Convert the block into a string representation for hashing and signing.
@@ -44,12 +68,16 @@ class Block:
         block_str += f"Time: {str(self.time)}\n"
         block_str += f"Miner: {self.miner}\n"
         block_str += f"Previous Hash: {self.pre_hash}\n"
+        block_str += f"Sig: {self.sig}\n"
         return block_str
 
-    def block_to_json(self):
-        return json.dumps(
-            {"index": self.index, "nonce": self.nonce, "bloom": self.bloom, "m_tree_root": self.m_tree_root,
-             "time": self.time, "miner": self.miner, "pre_hash": self.pre_hash, "sig": self.sig}, sort_keys=True).encode()
+    def block_to_pickle(self):
+        return pickle.dumps(self)
+
+    def print_block(self):
+      print('//////// BLOCK ////////\n')
+      print(self.block_to_str())
+      print('//////// BLOCK ////////')
 
     # Getter methods
     def get_index(self):

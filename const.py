@@ -14,7 +14,7 @@ ACC_ACC_DELAY = 1.5
 NODE_NUM = 5
 
 # Number of simulated accounts
-ACCOUNT_NUM = 5
+ACCOUNT_NUM = 20
 
 # Number of transactions to package at once, theoretically should not exceed ACCOUNT_NUM^2 / 2
 # (/2 because at least ACCOUNT_NUM/2 accounts participate in transactions randomly)
