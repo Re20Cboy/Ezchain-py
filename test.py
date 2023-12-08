@@ -7,6 +7,7 @@ from Distributed_con_node import ConNode
 from Ezchain_simulate import EZsimulate
 import json
 import pickle
+from Distributed_acc_node import DstAcc
 
 class TestBloomFilter(unittest.TestCase):
     def setUp(self):
@@ -144,6 +145,13 @@ class simulate_env_4_con_node(unittest.TestCase):
         loaded_genesis_block = self.load_data_from_file('genesis_block_data.pkl')
         loaded_EZs = self.load_data_from_file('EZs_data.pkl')
         return (loaded_genesis_block, loaded_EZs)
+
+class test_dst_acc(unittest.TestCase):
+    def test_dst_acc_entry_point(self):
+        dst_node = DstAcc()
+        dst_node.entry_point()
+        pass
+
 
 
 if __name__ == '__main__':
