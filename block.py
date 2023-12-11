@@ -28,7 +28,7 @@ class Block:
         self.time = time if time is not None else datetime.datetime.now()
         self.miner = miner
         self.pre_hash = pre_hash
-        self.sig = unit.generate_signature(miner)  # Digital signature implementation pending
+        self.sig = unit.generate_signature(miner) if index != 0 else 0  # Digital signature implementation pending
 
     def block_to_json(self):
         """

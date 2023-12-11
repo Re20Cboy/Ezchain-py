@@ -1,6 +1,7 @@
 import pickle
 import socket
 import uuid
+import re
 
 ANSI_RESET = "\u001B[0m"
 ANSI_RED = "\u001B[31m"
@@ -46,7 +47,7 @@ class TransMsg:
     def __init__(self):
         self.self_port = 0
         self.node_uuid = 0
-        self.neighbor_info = {}
+        self.neighbor_info = []
         self.server_tcp = None
         self.broadcaster_udp = None
         self.client_tcp = None
@@ -80,11 +81,19 @@ class TransMsg:
         self.local_ip = socket.gethostbyname(socket.gethostname())
 
     def add_neighbor(self, neighbor_info_instance):
-        self.neighbor_info[neighbor_info_instance.uuid] = neighbor_info_instance
+        self.neighbor_info.append(neighbor_info_instance)
+        self.print_neighbors()
+
+    def find_neighbor_via_uuid(self, uuid):
+        for index, item in enumerate(self.neighbor_info, start=0):
+            if item.uuid == uuid:
+                return index
+        return None
+
     def check_is_self(self, msg):
-        if (self.node_uuid != msg and self.neighbor_info.get(msg) == None):
+        if (self.node_uuid != msg and self.find_neighbor_via_uuid(msg) == None):
             return 1
-        elif (self.node_uuid != msg and self.neighbor_info.get(msg) != None):
+        elif (self.node_uuid != msg and self.find_neighbor_via_uuid(msg) != None):
             return 2
         else:  # node_uuid == message, i.e., node itself
             return 0
@@ -118,15 +127,43 @@ class TransMsg:
             else: # self node
                 print_red("Ignore msg.")
 
+    def find_word_after_msg(self, text):
+        pattern = r"MSG: (\w+)"
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1)
+        else:
+            return "no matched word"
 
     def tcp_receive(self):
         """
         Args:
         - server
         """
-        conn, addr = self.server_tcp.accept()
-        received_data = pickle.loads(conn.recv(4096))  # 这里的4096表示接收消息的最大字节数
-        print_blue("Received TCP data: " + received_data)
+        while True:
+            conn, addr = self.server_tcp.accept()
+            received_data = pickle.loads(conn.recv(4096))  # 这里的4096表示接收消息的最大字节数
+            print_blue("Received TCP data: " + received_data)
+
+            result = self.find_word_after_msg(received_data)
+            if result == "Hello":
+                self.process_tcp_hello(received_data)
+
+    def process_tcp_hello(self, received_data):
+        # define prefix
+        prefix = " MSG: " + 'Hello' + ": "
+        # find prefix's index
+        prefix_index = received_data.find(prefix)
+        msg_info = received_data[(prefix_index + len(prefix)):]
+        prefix_info = received_data[:(prefix_index + len(prefix))]
+        parsed_msg = prefix_info.split(" ")
+        parsed_uuid = parsed_msg[1]
+        (uuid, port, addr) = self.decode_hello_msg(msg_info)
+        print_blue("Recv this msg, add new neighbor...")
+        # process logic of recv hello msg:
+        new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr)
+        self.add_neighbor(new_neighbor)
+        print_green("Success add.")
 
     def tcp_send(self, other_tcp_port, data_to_send, other_ip="127.0.0.1"): # local test, thus other_ip="127.0.0.1"
         """
@@ -141,6 +178,7 @@ class TransMsg:
         SENDER.send(pickled_data)
 
         SENDER.close()
+
     def decode_hello_msg(self, hello_msg):
         decoded_msg = hello_msg.split(" ")
         uuid = decoded_msg[1]
@@ -148,7 +186,7 @@ class TransMsg:
         addr = decoded_msg[5]
         return uuid, port, addr
 
-    def listen_hello(self, msg_type: str):
+    def listen_hello(self, msg_type: str, my_addr):
         while True:
             recv_brd_msg, (ip, port) = self.client_tcp.recvfrom(4096)  # max: 4096 Bytes
 
@@ -171,6 +209,15 @@ class TransMsg:
                 new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr)
                 self.add_neighbor(new_neighbor)
                 print_green("Success add.")
+                # create self info for new neighbor
+                my_uuid = "uuid: " + str(self.node_uuid)
+                my_port = "port: " + str(self.self_port)
+                my_addr_2 = "addr: " + str(my_addr)
+                hello_msg = my_uuid + " " + my_port + " " + my_addr_2
+                new_msg_info = prefix_info + hello_msg
+                # send self info to new neighbor
+                print_blue("send tcp msg to " + port + " from " + my_port + ": " + str(new_msg_info))
+                self.tcp_send(other_tcp_port=port, data_to_send=new_msg_info)
             else:  # self node
                 print_yellow("Ignore this msg.")
 
@@ -181,3 +228,14 @@ class TransMsg:
         addr = "addr: " + str(addr)
         hello_msg = uuid + " " + port + " " + addr
         self.broadcast(msg=hello_msg, msg_type='Hello')
+
+    def print_neighbors(self):
+        print("=" * 25)
+        for index, value in enumerate(self.neighbor_info, start=0):
+            print(f"Neighbor {index} Info:")
+            print(f"IP: {value.ip}")
+            print(f"TCP Port: {value.tcp_port}")
+            print(f"UUID: {value.uuid}")
+            print(f"Address: {value.addr}")
+            print("\n")
+        print("=" * 25)

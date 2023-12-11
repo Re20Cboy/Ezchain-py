@@ -383,6 +383,12 @@ def generate_random_hex(length):
         hex_number += random.choice(hex_digits)
     return hex_number
 
+
+def sort_and_get_positions(A):
+    sorted_A = sorted(A)
+    positions = [sorted_A.index(x) for x in A]
+    return positions
+
 if __name__ == "__main__":
     elems = ['1', '2', '3', '4', '5', '6']
     print('构造树')

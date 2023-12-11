@@ -8,6 +8,7 @@ from Ezchain_simulate import EZsimulate
 import json
 import pickle
 from Distributed_acc_node import DstAcc
+import unit
 
 class TestBloomFilter(unittest.TestCase):
     def setUp(self):
@@ -152,8 +153,10 @@ class test_dst_acc(unittest.TestCase):
         dst_node.entry_point()
         pass
 
-
+    def test_sort_and_get_positions(self):
+        uuid = [5, 2, 9, 3, 7]
+        positions = unit.sort_and_get_positions(uuid)
+        print(positions) # [2, 0, 4, 1, 3] means that 5 in 2-th position, 2 in 0-th position, 9 in 4-th position, ...
 
 if __name__ == '__main__':
     unittest.main()
-

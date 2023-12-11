@@ -18,7 +18,7 @@ from pympler import asizeof
 import datetime #系统时间作为文件名，防止记录时同文件名覆盖
 import cProfile # 分析性能
 import csv #将实验结果存储在csv表格中
-
+from datetime import datetime
 
 class EZsimulate:
     def __init__(self):
@@ -129,6 +129,40 @@ class EZsimulate:
             tmpPrf = unit.Proof([tmpPrfUnit])
             tmpVPBPair = [genesisAccTxns[count].Value, tmpPrf, [genesisBlock.index]] # V-P-B对
             acc.add_VPBpair(tmpVPBPair)
+        return genesisBlock
+
+    def generate_GenesisBlock_for_Dst(self, Dst_accounts):
+        v_genesis_begin = '0x77777777777777777777777777777777777777777777777777777777777777777' # 65位16进制
+        v_genesis_num = 100000000 # 初始化每个账户1亿个token（最小单位）
+        genesisAccTxns = []
+        for i in range(len(Dst_accounts)):
+            if i > 0:
+                v_genesis_begin = int(v_genesis_begin, 16) + v_genesis_num*i + 1
+                v_genesis_begin = hex(v_genesis_begin)
+            V = unit.Value(beginIndex=v_genesis_begin, valueNum=v_genesis_num)
+            Txn = transaction.Transaction(sender=GENESIS_SENDER, recipient=Dst_accounts[i].addr,
+                                                         nonce=0, signature='GENESIS_SIG', value=V,
+                                                         tx_hash=0, time=0)
+            genesisAccTxns.append(Txn)
+        # 生成创世块
+        GAccTxns = transaction.AccountTxns(sender=GENESIS_SENDER, senderID=None, accTxns=genesisAccTxns)
+        encodedGAccTxns = [GAccTxns.Encode()]
+        preBlockHash = '0x7777777'
+        blockIndex = 0
+        genesisMTree = unit.MerkleTree(encodedGAccTxns, isGenesisBlcok=True)
+        m_tree_root = genesisMTree.getRootHash()
+        fixed_time = datetime(2022, 12, 31, 18, 30, 0)
+        genesisBlock = block.Block(index=blockIndex, m_tree_root = m_tree_root, miner = GENESIS_MINER_ID, pre_hash = preBlockHash, time = fixed_time)
+
+        # 将创世块加入区块链中
+        # self.blockchain = blockchain.Blockchain(genesisBlock)
+        # 生成每个创世块中的proof
+        for count, acc in enumerate(Dst_accounts, start=0):
+            tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=GAccTxns.AccTxns ,ownerMTreePrfList=[genesisMTree.root.value])
+            tmpPrf = unit.Proof([tmpPrfUnit])
+            tmpVPBPair = [genesisAccTxns[count].Value, tmpPrf, [genesisBlock.index]] # V-P-B对
+            if type(acc) == account.Account: # dst acc only add its own vpb pair
+                acc.add_VPBpair(tmpVPBPair)
         return genesisBlock
 
     def generate_block(self):

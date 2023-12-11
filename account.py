@@ -112,7 +112,7 @@ class Account:
             raise ValueError("The corresponding Value was not found")
 
 
-    def generate_random_account(self):
+    def generate_random_account(self, file_id=0):
         # Generate a random address
         self.addr = ''.join(random.choices(string.ascii_letters + string.digits, k=42))  # Bitcoin address is 42 characters long
         # Generate a private key
