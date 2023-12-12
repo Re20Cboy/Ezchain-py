@@ -120,8 +120,12 @@ class Account:
         # Obtain the public key from the private key
         public_key = private_key.public_key()
         # Save the addresses of the public and private keys
-        privatePath = ACCOUNT_PRIVATE_KEY_PATH + "private_key_node_"+str(self.id)+".pem"
-        publicPath = ACCOUNT_PUBLIC_KEY_PATH + "public_key_node_"+str(self.id)+".pem"
+        if file_id == 0: # for EZ simulate
+            privatePath = ACCOUNT_PRIVATE_KEY_PATH + "private_key_node_"+str(self.id)+".pem"
+            publicPath = ACCOUNT_PUBLIC_KEY_PATH + "public_key_node_"+str(self.id)+".pem"
+        else: # for dst simulate
+            privatePath = ACCOUNT_PRIVATE_KEY_PATH + "private_key_node_" + str(file_id) + ".pem"
+            publicPath = ACCOUNT_PUBLIC_KEY_PATH + "public_key_node_" + str(file_id) + ".pem"
         self.privateKeyPath = privatePath
         self.publicKeyPath = publicPath
         self.privateKey = private_key.private_bytes(

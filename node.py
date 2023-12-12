@@ -16,11 +16,11 @@ from utils import ensure_directory_exists, write_data_to_file
 
 
 class Node:
-    def __init__(self, id, neighbors = [], port = 0):
+    def __init__(self, id, neighbors = [], port = 0, dst = False):
         self.id = id
         #self.port = port
         self.neighbors = neighbors
-        self.blockchain = Blockchain()
+        self.blockchain = Blockchain(dst=dst)
         #self.current_block = None  # 当前正在处理的区块
         #self.difficulty = 4  # PoW共识难度
         self.tmpBlockMsg = None # 临时存储的区块信息
@@ -36,7 +36,7 @@ class Node:
         self.blockCheckCostedTime = []  # 用于记录验证消耗的时间，最后用于计算tps、区块确认等数据
         self.blockBodyCheckCostedTime = []  # 用于记录验证消耗的时间，最后用于计算tps、区块确认等数据
 
-    def generate_random_node(self): 
+    def generate_random_node(self, file_id=0):
         '''
         随机生成node的公钥、私钥及地址信息
         '''
@@ -47,8 +47,12 @@ class Node:
         # 从私钥中获取公钥
         public_key = private_key.public_key()
         # 保存公私钥的地址：
-        privatePath = NODE_PRIVATE_KEY_PATH + "private_key_node_"+str(self.id)+".pem"
-        publicPath = NODE_PUBLIC_KEY_PATH + "public_key_node_"+str(self.id)+".pem"
+        if file_id == 0: # for EZ simulate
+            privatePath = NODE_PRIVATE_KEY_PATH + "private_key_node_"+str(self.id)+".pem"
+            publicPath = NODE_PUBLIC_KEY_PATH + "public_key_node_"+str(self.id)+".pem"
+        else: # for dst simulate
+            privatePath = NODE_PRIVATE_KEY_PATH + "private_key_node_" + str(file_id) + ".pem"
+            publicPath = NODE_PUBLIC_KEY_PATH + "public_key_node_" + str(file_id) + ".pem"
         self.privateKeyPath = privatePath
         self.publicKeyPath = publicPath
         # 生成私钥

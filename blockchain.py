@@ -2,11 +2,12 @@ import block
 import hashlib
 
 class Blockchain:
-    def __init__(self, GenesisBlock = None):
+    def __init__(self, GenesisBlock = None, dst=False): # dst means distribute simulate
         self.chain = []  # List to store blocks in the blockchain
-        if GenesisBlock is None:
-            GenesisBlock = block.Block(index=0, m_tree_root=hash(0), miner=0, pre_hash=hash(0))
-        self.chain.append(GenesisBlock)
+        if not dst:
+            if GenesisBlock is None:
+                GenesisBlock = block.Block(index=0, m_tree_root=hash(0), miner=0, pre_hash=hash(0))
+            self.chain.append(GenesisBlock)
 
     def add_block(self, block):
         self.chain.append(block)

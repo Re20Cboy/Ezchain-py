@@ -2,6 +2,9 @@ import pickle
 import socket
 import uuid
 import re
+import sys
+import gzip
+import threading
 
 ANSI_RESET = "\u001B[0m"
 ANSI_RED = "\u001B[31m"
@@ -35,19 +38,26 @@ def get_broadcast_port():
 def get_node_uuid():
     return _NODE_UUID
 
+def daemon_thread_builder(target, args=()) -> threading.Thread:
+    th = threading.Thread(target=target, args=args)
+    th.setDaemon(True)
+    return th
 
 class NeighborInfo(object):
-    def __init__(self, ip="127.0.0.1", tcp_port=None, uuid=None, addr=None):
+    def __init__(self, ip="127.0.0.1", tcp_port=None, uuid=None, addr=None, node_type=None):
         self.ip = ip
         self.tcp_port = tcp_port
         self.uuid = uuid
         self.addr = addr
+        self.node_type = node_type
 
 class TransMsg:
     def __init__(self):
         self.self_port = 0
         self.node_uuid = 0
         self.neighbor_info = []
+        self.acc_neighbor_info = []
+        self.con_neighbor_info = []
         self.server_tcp = None
         self.broadcaster_udp = None
         self.client_tcp = None
@@ -99,13 +109,21 @@ class TransMsg:
             return 0
 
     def broadcast(self, msg, msg_type):
-        pickled_msg = pickle.dumps(msg)
-        msg_prefix = "node_uuid: " + str(self.node_uuid) + " ON " + str(self.self_port) + " MSG: " + msg_type + ": "
+        pickled_msg = pickle.dumps(msg) # msg may not str!
+        msg_prefix = "node_uuid: " + str(self.node_uuid) + " ON " + str(self.self_port) + " , " + msg_type +" MSG: "
         encoded_msg_prefix = msg_prefix.encode("utf-8")
         encode_msg = encoded_msg_prefix + pickled_msg
-        self.broadcaster_udp.sendto(encode_msg, ('255.255.255.255', get_broadcast_port()))
-        print_green("broadcast msg.")
+
+        compressed_msg = gzip.compress(encode_msg)  # zip msg
+
+        # encode_msg_size = sys.getsizeof(all_msg)
+        compressed_encode_msg_size = sys.getsizeof(compressed_msg)
+        # msg_size = sys.getsizeof(msg)
+
+        self.broadcaster_udp.sendto(compressed_msg, ('255.255.255.255', get_broadcast_port()))
+        print_green("broadcast *" + msg_type + "* msg, size = " + str(compressed_encode_msg_size) + " Bytes.")
         pass
+
 
     def brd_receive(self): # msg_type is str
         while True:
@@ -135,6 +153,14 @@ class TransMsg:
         else:
             return "no matched word"
 
+    def find_word_before_msg(self, text):
+        pattern = r"(\w+) MSG:"
+        match = re.search(pattern, text)
+        if match:
+            return match.group(1)
+        else:
+            return "no matched word"
+
     def tcp_receive(self):
         """
         Args:
@@ -145,24 +171,28 @@ class TransMsg:
             received_data = pickle.loads(conn.recv(4096))  # 这里的4096表示接收消息的最大字节数
             print_blue("Received TCP data: " + received_data)
 
-            result = self.find_word_after_msg(received_data)
+            result = self.find_word_before_msg(received_data)
             if result == "Hello":
                 self.process_tcp_hello(received_data)
 
     def process_tcp_hello(self, received_data):
         # define prefix
-        prefix = " MSG: " + 'Hello' + ": "
+        prefix =' Hello' + " MSG: "
         # find prefix's index
         prefix_index = received_data.find(prefix)
         msg_info = received_data[(prefix_index + len(prefix)):]
         prefix_info = received_data[:(prefix_index + len(prefix))]
         parsed_msg = prefix_info.split(" ")
         parsed_uuid = parsed_msg[1]
-        (uuid, port, addr) = self.decode_hello_msg(msg_info)
+        (uuid, port, addr, node_type) = self.decode_hello_msg(msg_info)
         print_blue("Recv this msg, add new neighbor...")
         # process logic of recv hello msg:
-        new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr)
+        new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
         self.add_neighbor(new_neighbor)
+        if new_neighbor.node_type == 'acc':
+            self.acc_neighbor_info.append(new_neighbor)
+        elif new_neighbor.node_type == 'con':
+            self.con_neighbor_info.append(new_neighbor)
         print_green("Success add.")
 
     def tcp_send(self, other_tcp_port, data_to_send, other_ip="127.0.0.1"): # local test, thus other_ip="127.0.0.1"
@@ -184,50 +214,107 @@ class TransMsg:
         uuid = decoded_msg[1]
         port = decoded_msg[3]
         addr = decoded_msg[5]
-        return uuid, port, addr
+        node_type = decoded_msg[7]
+        return uuid, port, addr, node_type
 
-    def listen_hello(self, msg_type: str, my_addr):
+    def listen_brd(self, my_addr, my_type, my_local_chain):
         while True:
-            recv_brd_msg, (ip, port) = self.client_tcp.recvfrom(4096)  # max: 4096 Bytes
-
-            # define prefix
-            prefix = " MSG: " + msg_type + ": "
+            received_compressed_msg, (ip, port) = self.client_tcp.recvfrom(8192)  # max: 4096 Bytes
+            # decompress recv msg
+            decompressed_data = gzip.decompress(received_compressed_msg)
+            # decode decompress recv msg
+            prefix = " MSG: "
             # find prefix's index
-            prefix_index = recv_brd_msg.find(prefix.encode("utf-8"))
-            msg_info = pickle.loads(recv_brd_msg[(prefix_index + len(prefix)):])
-            prefix_info = recv_brd_msg[:(prefix_index + len(prefix))].decode("utf-8")
-
+            prefix_index = decompressed_data.find(prefix.encode("utf-8"))
+            if prefix_index < 0:
+                raise ValueError('prefix_index < 0 !')
+            pure_msg = pickle.loads(decompressed_data[(prefix_index + len(prefix)):])
+            prefix_info = decompressed_data[:(prefix_index + len(prefix))].decode("utf-8")
             parsed_msg = prefix_info.split(" ")
-            parsed_uuid = parsed_msg[1]
+            uuid = parsed_msg[1]
+            port = parsed_msg[3]
+            msg_type = parsed_msg[5]
 
-            (uuid, port, addr) = self.decode_hello_msg(msg_info)
+            # check is self's msg
+            if self.check_is_self(uuid) == 0:
+                print_yellow('self msg, ignore.')
+            else:
+                # enter diff process func
+                if msg_type == 'Hello':
+                    listen_hello = daemon_thread_builder(self.listen_hello, args=(my_addr, my_type, pure_msg, ))
+                    listen_hello.start()
+                    listen_hello.join()
+                elif msg_type == 'Block':
+                    listen_block = daemon_thread_builder(self.listen_block, args=(my_local_chain, pure_msg, ))
+                    listen_block.start()
+                    listen_block.join()
+                else:
+                    print_red('Not Find this msg_type: ' + msg_type)
+                    pass
 
-            is_self_flag = self.check_is_self(parsed_uuid)
-            if (is_self_flag == 1 or is_self_flag == 2):  # not self
-                print_blue("Recv this msg, add new neighbor...")
-                # process logic of recv hello msg:
-                new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr)
-                self.add_neighbor(new_neighbor)
-                print_green("Success add.")
-                # create self info for new neighbor
-                my_uuid = "uuid: " + str(self.node_uuid)
-                my_port = "port: " + str(self.self_port)
-                my_addr_2 = "addr: " + str(my_addr)
-                hello_msg = my_uuid + " " + my_port + " " + my_addr_2
-                new_msg_info = prefix_info + hello_msg
-                # send self info to new neighbor
-                print_blue("send tcp msg to " + port + " from " + my_port + ": " + str(new_msg_info))
-                self.tcp_send(other_tcp_port=port, data_to_send=new_msg_info)
-            else:  # self node
-                print_yellow("Ignore this msg.")
+    def listen_hello(self, my_addr, my_type, pure_msg):
+        (uuid, port, addr, node_type) = self.decode_hello_msg(pure_msg)
+        print_blue("Recv Hello msg, add new neighbor...")
+        # process logic of recv hello msg:
+        new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
+        self.add_neighbor(new_neighbor)
+        if new_neighbor.node_type == 'acc':
+            self.acc_neighbor_info.append(new_neighbor)
+        elif new_neighbor.node_type == 'con':
+            self.con_neighbor_info.append(new_neighbor)
+        print_green("Success add this neighbor.")
+        # create self info for new neighbor
+        my_uuid = "uuid: " + str(self.node_uuid)
+        my_port = "port: " + str(self.self_port)
+        my_addr_2 = "addr: " + str(my_addr)
+        my_type_2 = "node_type: " + my_type
+        hello_msg = my_uuid + " " + my_port + " " + my_addr_2 + " " + my_type_2
+        msg_prefix = "node_uuid: " + str(self.node_uuid) + " ON " + str(self.self_port) + " Hello MSG: "
+        new_msg_info = msg_prefix + hello_msg
+        # send self info to new neighbor
+        print_blue("send tcp msg to " + port + " from " + my_port + ": " + str(new_msg_info))
+        self.tcp_send(other_tcp_port=port, data_to_send=new_msg_info)
 
-    def brd_hello_to_neighbors(self, addr):
+    def listen_block(self, my_local_chain, pure_msg):
+        block = pure_msg
+        print_blue("Recv Block msg, add new block...")
+        if block.index == 0: # is genesis block
+            if len(my_local_chain.chain) == 0: # local chain is empty
+                my_local_chain.add_block(block)
+                print_green("Success add this block.")
+            else:
+                print_yellow('Ignore this genesis block.')
+        elif my_local_chain.is_valid_block(block): # valid block, otherwise ignore this block
+                my_local_chain.add_block(block)
+                print_green("Success add this block.")
+        else:
+            print_red("Ignore this block.")
+
+    def decode_acc_txns_package_msg(self, acc_txns_package_msg):
+        pass
+
+    def listen_acc_txns_package(self, pure_msg):
+        pass
+
+    def brd_hello_to_neighbors(self, addr, node_type):
         print_blue('Init and brd hello msg to neighbors!')
         uuid = "uuid: " + str(self.node_uuid)
         port = "port: " + str(self.self_port)
-        addr = "addr: " + str(addr)
-        hello_msg = uuid + " " + port + " " + addr
+        addr_2 = "addr: " + str(addr)
+        node_type_2 = "node_type: " + node_type
+        hello_msg = uuid + " " + port + " " + addr_2 + " " + node_type_2
         self.broadcast(msg=hello_msg, msg_type='Hello')
+
+    def brd_block_to_neighbors(self, block):
+        if block.index == 0:
+            print_blue('Brd GENESIS block to all nodes!')
+        else:
+            print_blue('Brd block to all nodes!')
+        self.broadcast(msg=block, msg_type='Block')
+
+    def brd_acc_txns_package_to_con_node(self, acc_txns_package):
+        print_blue('Brd acc txns package to con-nodes (txn pool)!')
+        self.broadcast(msg=acc_txns_package, msg_type='AccTxnsPackage')
 
     def print_neighbors(self):
         print("=" * 25)

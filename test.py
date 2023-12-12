@@ -3,11 +3,11 @@
 import unittest
 from bloom import BloomFilter, BloomFilterEncoder
 from block import Block
-from Distributed_con_node import ConNode
+from old_Distributed_con_node import ConNode
 from Ezchain_simulate import EZsimulate
 import json
 import pickle
-from Distributed_acc_node import DstAcc
+from Distributed_acc_node_i import DstAcc
 import unit
 
 class TestBloomFilter(unittest.TestCase):

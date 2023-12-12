@@ -1,6 +1,6 @@
 import time
 
-import trans_msg_for_dts_acc
+import trans_msg_for_dts
 import threading
 
 class P2P_node:

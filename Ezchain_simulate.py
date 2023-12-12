@@ -94,7 +94,7 @@ class EZsimulate:
                 tmpVNum = len(txn.Value)
                 thisRoundAllTransValueNum += tmpVNum
             accountTxns.append(transaction.AccountTxns(self.accounts[i].addr, i, tmpAccTxn))
-            self.accounts[i].accTxnsIndex = i # 设置账户对于其提交交易在区块中位置的索引
+            self.accounts[i].accTxnsIndex = i # 设置账户对其提交交易在区块中位置的索引
             accountTxnsRecipientList.append(randomRecipientsIndexList)
         self.transVNumList.append(thisRoundAllTransValueNum)
         return accountTxns, accountTxnsRecipientList
