@@ -241,18 +241,18 @@ class TransMsg:
             else:
                 # enter diff process func
                 if msg_type == 'Hello':
-                    listen_hello = daemon_thread_builder(self.listen_hello, args=(my_addr, my_type, pure_msg, ))
+                    listen_hello = daemon_thread_builder(self.hello_msg_process, args=(my_addr, my_type, pure_msg, ))
                     listen_hello.start()
                     listen_hello.join()
                 elif msg_type == 'Block':
-                    listen_block = daemon_thread_builder(self.listen_block, args=(my_local_chain, pure_msg, ))
+                    listen_block = daemon_thread_builder(self.block_msg_process, args=(my_local_chain, pure_msg, ))
                     listen_block.start()
                     listen_block.join()
                 else:
                     print_red('Not Find this msg_type: ' + msg_type)
                     pass
 
-    def listen_hello(self, my_addr, my_type, pure_msg):
+    def hello_msg_process(self, my_addr, my_type, pure_msg):
         (uuid, port, addr, node_type) = self.decode_hello_msg(pure_msg)
         print_blue("Recv Hello msg, add new neighbor...")
         # process logic of recv hello msg:
@@ -275,7 +275,8 @@ class TransMsg:
         print_blue("send tcp msg to " + port + " from " + my_port + ": " + str(new_msg_info))
         self.tcp_send(other_tcp_port=port, data_to_send=new_msg_info)
 
-    def listen_block(self, my_local_chain, pure_msg):
+    def block_msg_process(self, my_local_chain, pure_msg):
+        type_pure_msg = type(pure_msg)
         block = pure_msg
         print_blue("Recv Block msg, add new block...")
         if block.index == 0: # is genesis block

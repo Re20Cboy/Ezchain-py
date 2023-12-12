@@ -94,11 +94,6 @@ class DstAcc:
         if self.global_id == 0:
             self.trans_msg.brd_block_to_neighbors(genesis_block)
 
-        # start listen to block
-        listen_block = daemon_thread_builder(self.trans_msg.listen_block,
-                                             args=(self.blockchain, 'Block'))  # msg_type='Block'
-        listen_block.start()
-
         # generate txns
         acc_txns, acc_txns_package = self.random_generate_acc_txns_package()
         print("This round generate " + str(len(acc_txns)) + " txns.")
@@ -111,7 +106,6 @@ class DstAcc:
 
         # send proof to receiver
 
-        listen_block.join()
 
     def init_point(self):
         self.print_self_info()
