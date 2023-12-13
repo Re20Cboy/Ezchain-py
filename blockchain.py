@@ -29,6 +29,8 @@ class Blockchain:
     def is_valid_block(self, block):
         if block.get_pre_hash() != self.get_latest_block_hash():
             return False
+        if block.index != len(self.chain):
+            return False
         return True
 
     def print_chain(self):

@@ -71,6 +71,10 @@ class Block:
         block_str += f"Sig: {self.sig}\n"
         return block_str
 
+    def block_to_short_str(self):
+        block_str = f"Index: {self.index}, Miner: {self.miner}, Pre Hash: {self.pre_hash}"
+        return block_str
+
     def block_to_pickle(self):
         return pickle.dumps(self)
 

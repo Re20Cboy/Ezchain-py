@@ -18,12 +18,13 @@ def daemon_thread_builder(target, args=()) -> threading.Thread:
 # design for distributed account node
 class DstAcc:
     def __init__(self):
-        self.trans_msg = TransMsg()
+        self.trans_msg = TransMsg(node_type="acc")
         self.account = Account(ID=0) # this ID is designed for EZ simulate, useless here !
         self.account.generate_random_account(file_id=self.trans_msg.node_uuid) # init account info
         self.global_id = None # init when get all neighbors
         self.blockchain = Blockchain(dst=True) # distributed simulate
         self.node_type = "acc" # acc for account
+        self.send_package_flag = False
 
     def send_txns_to_txn_pool(self):
         pass
@@ -35,6 +36,7 @@ class DstAcc:
         print(f"TCP Port: {self.trans_msg.self_port}")
         print(f"UUID: {self.trans_msg.node_uuid}")
         print(f"Address: {self.account.addr}")
+        print("Node Type: acc node")
         print("*" * 50)
 
     def random_generate_acc_txns_package(self):
@@ -82,6 +84,16 @@ class DstAcc:
                 self.entry_point(Dst_acc)
                 return
 
+    def send_package_to_txn_pool(self):
+        while True:
+            if self.send_package_flag:
+                # generate txns
+                acc_txns, acc_txns_package = self.random_generate_acc_txns_package()
+                print("This round generate " + str(len(acc_txns)) + " txns.")
+                # send txns package to pool (brd to all con nodes)
+                self.trans_msg.brd_acc_txns_package_to_con_node(acc_txns_package)
+                self.send_package_flag = False
+
     def entry_point(self, Dst_acc):
         EZs = EZsimulate()
         # generate genesis block
@@ -94,11 +106,9 @@ class DstAcc:
         if self.global_id == 0:
             self.trans_msg.brd_block_to_neighbors(genesis_block)
 
-        # generate txns
-        acc_txns, acc_txns_package = self.random_generate_acc_txns_package()
-        print("This round generate " + str(len(acc_txns)) + " txns.")
-
-        # send txns package to pool
+        self.send_package_flag = True
+        send_package = daemon_thread_builder(self.send_package_to_txn_pool)
+        send_package.start()
 
 
         # get proof from miner
@@ -106,12 +116,14 @@ class DstAcc:
 
         # send proof to receiver
 
+        send_package.join()
+
 
     def init_point(self):
         self.print_self_info()
         # init (get all node's addr, uuid, ...)
         # listen_hello thread listening hello brd msg from network
-        listen_brd = daemon_thread_builder(self.trans_msg.listen_brd, args=(self.account.addr, self.node_type, self.blockchain)) # msg_type='Hello'
+        listen_brd = daemon_thread_builder(self.trans_msg.listen_brd, args=(self.account.addr, self.node_type, self.blockchain, None, None, self.send_package_flag)) # msg_type='Hello'
         # say hello to other nodes when init
         self.trans_msg.brd_hello_to_neighbors(addr=self.account.addr, node_type=self.node_type) # say hello when init
         # listen_p2p thread listening hello tcp msg from network

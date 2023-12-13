@@ -14,6 +14,20 @@ class txnsPool:
             accTxns[i].sig_accTxn(accounts[i].privateKey) # 对accTxn进行签名
             self.pool.append(copy.deepcopy((accTxns[i].Digest, accTxns[i].Signature, accounts[i].addr, accounts[i].id)))
 
+    def add_acc_txns_package(self, acc_txns_package): # this func is designed for DST!
+        self.pool.append(acc_txns_package)
+
+    def check_is_repeated_package(self, acc_txns_package):
+        if self.pool == []:
+            return False
+        for item in self.pool:
+            if item == acc_txns_package:
+                return True
+        return False
+
+    def get_packages_num(self):
+        return len(self.pool)
+
     def clearPool(self):
         self.pool = []
 

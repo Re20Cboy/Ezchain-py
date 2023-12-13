@@ -128,7 +128,6 @@ class Node:
         index = len(self.blockchain.chain)
         if m_tree_root is None:
             m_tree_root = self.tmpBlockBodyMsg.get_mTree_root_hash()
-        #bloom = #布隆过滤器待实现，暂时使用缺省值
         miner = self.id
         block = Block(index = index, m_tree_root = m_tree_root, miner = miner, pre_hash = preBlockHash)
         #设置正确的bloom
@@ -141,6 +140,23 @@ class Node:
 
         self.tmpBlockMsg = BlockMsg(block)
         self.blockchain.add_block(block)
+
+    def create_new_block_for_dst(self, m_tree_root = None): # this func is designed for dst
+        preBlockHash = self.blockchain.get_latest_block_hash()
+        index = len(self.blockchain.chain)
+        if m_tree_root is None:
+            m_tree_root = self.tmpBlockBodyMsg.get_mTree_root_hash()
+        miner = self.id
+        block = Block(index = index, m_tree_root = m_tree_root, miner = miner, pre_hash = preBlockHash)
+        #设置正确的bloom
+        for item in self.tmpBlockBodyMsg.info_Txns:
+            block.bloom.add(item[2])
+        # 对区块进行签名
+        sig = self.sig_block(block)
+        block.sig = sig
+        self.tmpBlockMsg = BlockMsg(block)
+        self.blockchain.add_block(block)
+        return block
 
     def is_valid_block(self, block):
         # 判断区块是否有效

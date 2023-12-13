@@ -52,7 +52,7 @@ class NeighborInfo(object):
         self.node_type = node_type
 
 class TransMsg:
-    def __init__(self):
+    def __init__(self, node_type):
         self.self_port = 0
         self.node_uuid = 0
         self.neighbor_info = []
@@ -63,6 +63,7 @@ class TransMsg:
         self.client_tcp = None
         self.recv_brd_msgs = [] # recv brd msg list
         self.local_ip = None
+        self.node_type = node_type # acc or con
         self.generate_init_info()
 
     def generate_init_info(self):
@@ -91,8 +92,24 @@ class TransMsg:
         self.local_ip = socket.gethostbyname(socket.gethostname())
 
     def add_neighbor(self, neighbor_info_instance):
-        self.neighbor_info.append(neighbor_info_instance)
-        self.print_neighbors()
+        if self.check_is_repeat_neighbor(neighbor_info_instance):
+            # print_yellow('Repeated neighbor, ignore.')
+            pass
+        else:
+            if neighbor_info_instance.node_type == 'acc':
+                self.acc_neighbor_info.append(neighbor_info_instance)
+            elif neighbor_info_instance.node_type == 'con':
+                self.con_neighbor_info.append(neighbor_info_instance)
+            self.neighbor_info.append(neighbor_info_instance)
+            print_green('Success add neighbor! Now I have '+str(len(self.neighbor_info))+' neighbors')
+            # self.print_neighbors()
+
+    def check_is_repeat_neighbor(self, neighbor_info_instance):
+        unchecked_uuid = neighbor_info_instance.uuid
+        for item in self.neighbor_info:
+            if item.uuid == unchecked_uuid:
+                return True
+        return False
 
     def find_neighbor_via_uuid(self, uuid):
         for index, item in enumerate(self.neighbor_info, start=0):
@@ -121,7 +138,7 @@ class TransMsg:
         # msg_size = sys.getsizeof(msg)
 
         self.broadcaster_udp.sendto(compressed_msg, ('255.255.255.255', get_broadcast_port()))
-        print_green("broadcast *" + msg_type + "* msg, size = " + str(compressed_encode_msg_size) + " Bytes.")
+        # print_green("broadcast *" + msg_type + "* msg, size = " + str(compressed_encode_msg_size) + " Bytes.")
         pass
 
 
@@ -144,6 +161,7 @@ class TransMsg:
                 self.recv_brd_msgs.append((recv_brd_msg, parsed_port))  # 将接收到的消息加入列表
             else: # self node
                 print_red("Ignore msg.")
+                pass
 
     def find_word_after_msg(self, text):
         pattern = r"MSG: (\w+)"
@@ -169,7 +187,7 @@ class TransMsg:
         while True:
             conn, addr = self.server_tcp.accept()
             received_data = pickle.loads(conn.recv(4096))  # 这里的4096表示接收消息的最大字节数
-            print_blue("Received TCP data: " + received_data)
+            # print_blue("Received TCP data: " + received_data)
 
             result = self.find_word_before_msg(received_data)
             if result == "Hello":
@@ -185,15 +203,10 @@ class TransMsg:
         parsed_msg = prefix_info.split(" ")
         parsed_uuid = parsed_msg[1]
         (uuid, port, addr, node_type) = self.decode_hello_msg(msg_info)
-        print_blue("Recv this msg, add new neighbor...")
+        # print_blue("Recv this msg, add new neighbor...")
         # process logic of recv hello msg:
         new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
         self.add_neighbor(new_neighbor)
-        if new_neighbor.node_type == 'acc':
-            self.acc_neighbor_info.append(new_neighbor)
-        elif new_neighbor.node_type == 'con':
-            self.con_neighbor_info.append(new_neighbor)
-        print_green("Success add.")
 
     def tcp_send(self, other_tcp_port, data_to_send, other_ip="127.0.0.1"): # local test, thus other_ip="127.0.0.1"
         """
@@ -217,7 +230,7 @@ class TransMsg:
         node_type = decoded_msg[7]
         return uuid, port, addr, node_type
 
-    def listen_brd(self, my_addr, my_type, my_local_chain):
+    def listen_brd(self, my_addr, my_type, my_local_chain, con_node, acc_node):
         while True:
             received_compressed_msg, (ip, port) = self.client_tcp.recvfrom(8192)  # max: 4096 Bytes
             # decompress recv msg
@@ -237,17 +250,32 @@ class TransMsg:
 
             # check is self's msg
             if self.check_is_self(uuid) == 0:
-                print_yellow('self msg, ignore.')
+                # print_yellow('self msg, ignore.')
+                pass
             else:
                 # enter diff process func
                 if msg_type == 'Hello':
-                    listen_hello = daemon_thread_builder(self.hello_msg_process, args=(my_addr, my_type, pure_msg, ))
-                    listen_hello.start()
-                    listen_hello.join()
+                    hello_msg_process = daemon_thread_builder(
+                        self.hello_msg_process, args=(my_addr, my_type, pure_msg, ))
+                    hello_msg_process.start()
+                    hello_msg_process.join()
                 elif msg_type == 'Block':
-                    listen_block = daemon_thread_builder(self.block_msg_process, args=(my_local_chain, pure_msg, ))
-                    listen_block.start()
-                    listen_block.join()
+                    if self.node_type == "con": # con node process this msg, acc node ignore it.
+                        block_msg_process = daemon_thread_builder(self.block_msg_process, args=(
+                            my_local_chain, my_type, pure_msg, con_node, None))
+                        block_msg_process.start()
+                        block_msg_process.join()
+                    elif self.node_type == "acc":
+                        block_msg_process = daemon_thread_builder(self.block_msg_process, args=(
+                            my_local_chain, my_type, pure_msg, None, acc_node))
+                        block_msg_process.start()
+                        block_msg_process.join()
+                elif msg_type == 'AccTxnsPackage':
+                    if self.node_type == "con": # con node process this msg, acc node ignore it.
+                        acc_txns_package_msg_process = daemon_thread_builder(self.acc_txns_package_msg_process, args=(
+                            con_node, pure_msg,))
+                        acc_txns_package_msg_process.start()
+                        acc_txns_package_msg_process.join()
                 else:
                     print_red('Not Find this msg_type: ' + msg_type)
                     pass
@@ -258,11 +286,6 @@ class TransMsg:
         # process logic of recv hello msg:
         new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
         self.add_neighbor(new_neighbor)
-        if new_neighbor.node_type == 'acc':
-            self.acc_neighbor_info.append(new_neighbor)
-        elif new_neighbor.node_type == 'con':
-            self.con_neighbor_info.append(new_neighbor)
-        print_green("Success add this neighbor.")
         # create self info for new neighbor
         my_uuid = "uuid: " + str(self.node_uuid)
         my_port = "port: " + str(self.self_port)
@@ -272,24 +295,34 @@ class TransMsg:
         msg_prefix = "node_uuid: " + str(self.node_uuid) + " ON " + str(self.self_port) + " Hello MSG: "
         new_msg_info = msg_prefix + hello_msg
         # send self info to new neighbor
-        print_blue("send tcp msg to " + port + " from " + my_port + ": " + str(new_msg_info))
+        # print_blue("send tcp msg to " + port + " from " + my_port + ": " + str(new_msg_info))
         self.tcp_send(other_tcp_port=port, data_to_send=new_msg_info)
 
-    def block_msg_process(self, my_local_chain, pure_msg):
-        type_pure_msg = type(pure_msg)
+    def block_msg_process(self, my_local_chain, my_type, pure_msg, con_node, acc_node):
         block = pure_msg
-        print_blue("Recv Block msg, add new block...")
+        # print_blue("Recv Block msg, add new block...")
         if block.index == 0: # is genesis block
             if len(my_local_chain.chain) == 0: # local chain is empty
                 my_local_chain.add_block(block)
-                print_green("Success add this block.")
+                print_green("Success add this GENESIS block: "+block.block_to_short_str()+", now my chain's len = " + str(len(my_local_chain.chain)))
             else:
-                print_yellow('Ignore this genesis block.')
+                # print_yellow('Ignore this GENESIS block.')
+                pass
         elif my_local_chain.is_valid_block(block): # valid block, otherwise ignore this block
-                my_local_chain.add_block(block)
-                print_green("Success add this block.")
+            if my_type == "con": # con node
+                con_node.recv_new_block_flag = 1
+            my_local_chain.add_block(block)
+            print_green("Success add this block: "+block.block_to_short_str()+", now my chain's len = " + str(len(my_local_chain.chain)))
+            if my_type == "acc": # acc node
+                acc_node.send_package_flag = 1
+
         else:
             print_red("Ignore this block.")
+
+    def acc_txns_package_msg_process(self, con_node, pure_msg):
+        if not con_node.txns_pool.check_is_repeated_package(pure_msg):
+            # add acc_txns_package to self txn pool
+            con_node.txns_pool.add_acc_txns_package(pure_msg)
 
     def decode_acc_txns_package_msg(self, acc_txns_package_msg):
         pass
@@ -308,13 +341,15 @@ class TransMsg:
 
     def brd_block_to_neighbors(self, block):
         if block.index == 0:
-            print_blue('Brd GENESIS block to all nodes!')
+            # print_blue('Brd GENESIS block to all nodes!')
+            pass
         else:
-            print_blue('Brd block to all nodes!')
+            # print_blue('Brd block to all nodes!')
+            pass
         self.broadcast(msg=block, msg_type='Block')
 
     def brd_acc_txns_package_to_con_node(self, acc_txns_package):
-        print_blue('Brd acc txns package to con-nodes (txn pool)!')
+        # print_blue('Brd acc txns package to con-nodes (txn pool)!')
         self.broadcast(msg=acc_txns_package, msg_type='AccTxnsPackage')
 
     def print_neighbors(self):
@@ -325,5 +360,6 @@ class TransMsg:
             print(f"TCP Port: {value.tcp_port}")
             print(f"UUID: {value.uuid}")
             print(f"Address: {value.addr}")
-            print("\n")
+            print(f"Node Type: {value.node_type}")
+            print("-----------------")
         print("=" * 25)
