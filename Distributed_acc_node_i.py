@@ -93,6 +93,7 @@ class DstAcc:
                 # send txns package to pool (brd to all con nodes)
                 self.trans_msg.brd_acc_txns_package_to_con_node(acc_txns_package)
                 self.send_package_flag = 0
+                self.account.accTxns = acc_txns
 
     def entry_point(self, Dst_acc):
         EZs = EZsimulate()

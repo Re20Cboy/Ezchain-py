@@ -50,6 +50,7 @@ class NeighborInfo(object):
         self.uuid = uuid
         self.addr = addr
         self.node_type = node_type
+        self.index = None
 
 class TransMsg:
     def __init__(self, node_type):
@@ -103,6 +104,12 @@ class TransMsg:
             self.neighbor_info.append(neighbor_info_instance)
             print_green('Success add neighbor! Now I have '+str(len(self.neighbor_info))+' neighbors')
             # self.print_neighbors()
+
+    def find_neighbor_via_uuid(self, uuid):
+        for neighbor in self.neighbor_info:
+            if neighbor.uuid == uuid:
+                return neighbor.tcp_port
+        return None
 
     def check_is_repeat_neighbor(self, neighbor_info_instance):
         unchecked_uuid = neighbor_info_instance.uuid
@@ -171,7 +178,7 @@ class TransMsg:
         else:
             return "no matched word"
 
-    def find_word_before_msg(self, text):
+    def get_msg_type(self, text):
         pattern = r"(\w+) MSG:"
         match = re.search(pattern, text)
         if match:
@@ -180,21 +187,33 @@ class TransMsg:
             return "no matched word"
 
     def tcp_receive(self):
-        """
-        Args:
-        - server
-        """
         while True:
             conn, addr = self.server_tcp.accept()
-            received_data = pickle.loads(conn.recv(4096))  # 这里的4096表示接收消息的最大字节数
+            decompressed_data = gzip.decompress(conn.recv(8192))
+            # decode decompress recv msg
+            prefix = " MSG: "
+            # find prefix's index
+            prefix_index = decompressed_data.find(prefix.encode("utf-8"))
+            if prefix_index < 0:
+                raise ValueError('prefix_index < 0 !')
+            pure_msg = pickle.loads(decompressed_data[(prefix_index + len(prefix)):])
+            prefix_info = decompressed_data[:(prefix_index + len(prefix))].decode("utf-8")
+            parsed_msg = prefix_info.split(" ")
+            uuid = parsed_msg[1]
+            port = parsed_msg[3]
+            msg_type = parsed_msg[5]
+
+            # received_data = pickle.loads(conn.recv(4096))  # 这里的4096表示接收消息的最大字节数
             # print_blue("Received TCP data: " + received_data)
+            # msg_type = self.get_msg_type(received_data)
 
-            result = self.find_word_before_msg(received_data)
-            if result == "Hello":
-                self.process_tcp_hello(received_data)
+            if msg_type == "Hello":
+                self.tcp_hello_process(pure_msg)
+            if msg_type == "MtreeProof":
+                self.tcp_MTree_proof_process(pure_msg)
 
-    def process_tcp_hello(self, received_data):
-        # define prefix
+    def tcp_hello_process(self, pure_msg):
+        """# define prefix
         prefix =' Hello' + " MSG: "
         # find prefix's index
         prefix_index = received_data.find(prefix)
@@ -206,19 +225,35 @@ class TransMsg:
         # print_blue("Recv this msg, add new neighbor...")
         # process logic of recv hello msg:
         new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
+        self.add_neighbor(new_neighbor)"""
+
+        (uuid, port, addr, node_type) = self.decode_hello_msg(pure_msg)
+        print_blue("Recv Hello msg, add new neighbor...")
+        # process logic of recv hello msg:
+        new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
         self.add_neighbor(new_neighbor)
 
-    def tcp_send(self, other_tcp_port, data_to_send, other_ip="127.0.0.1"): # local test, thus other_ip="127.0.0.1"
+    def tcp_MTree_proof_process(self, pure_msg):
+        # update vpb
+
+    def tcp_send(self, other_tcp_port, data_to_send, msg_type, other_ip="127.0.0.1"): # local test, thus other_ip="127.0.0.1"
         """
         Open a connection to the other_ip, other_tcp_port
         and do the steps to exchange timestamps.
         Then update the neighbor_info map using other node's UUID.
         """
+        pickled_msg = pickle.dumps(data_to_send)  # msg may not str!
+        msg_prefix = "node_uuid: " + str(self.node_uuid) + " ON " + str(self.self_port) + " , " + msg_type + " MSG: "
+        encoded_msg_prefix = msg_prefix.encode("utf-8")
+        encode_msg = encoded_msg_prefix + pickled_msg
+
+        compressed_msg = gzip.compress(encode_msg)  # zip msg
+
         SENDER = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         SENDER.connect((other_ip, int(other_tcp_port)))
         # address = (other_ip, int(other_tcp_port))
-        pickled_data = pickle.dumps(data_to_send)
-        SENDER.send(pickled_data)
+        # pickled_data = pickle.dumps(data_to_send)
+        SENDER.send(compressed_msg)
 
         SENDER.close()
 
@@ -273,7 +308,7 @@ class TransMsg:
                 elif msg_type == 'AccTxnsPackage':
                     if self.node_type == "con": # con node process this msg, acc node ignore it.
                         acc_txns_package_msg_process = daemon_thread_builder(self.acc_txns_package_msg_process, args=(
-                            con_node, pure_msg,))
+                            uuid, con_node, pure_msg,))
                         acc_txns_package_msg_process.start()
                         acc_txns_package_msg_process.join()
                 else:
@@ -296,7 +331,7 @@ class TransMsg:
         new_msg_info = msg_prefix + hello_msg
         # send self info to new neighbor
         # print_blue("send tcp msg to " + port + " from " + my_port + ": " + str(new_msg_info))
-        self.tcp_send(other_tcp_port=port, data_to_send=new_msg_info)
+        self.tcp_send(other_tcp_port=port, data_to_send=new_msg_info, msg_type="Hello")
 
     def block_msg_process(self, my_local_chain, my_type, pure_msg, con_node, acc_node):
         block = pure_msg
@@ -319,10 +354,10 @@ class TransMsg:
         else:
             print_red("Ignore this block.")
 
-    def acc_txns_package_msg_process(self, con_node, pure_msg):
+    def acc_txns_package_msg_process(self, uuid, con_node, pure_msg):
         if not con_node.txns_pool.check_is_repeated_package(pure_msg):
             # add acc_txns_package to self txn pool
-            con_node.txns_pool.add_acc_txns_package(pure_msg)
+            con_node.txns_pool.add_acc_txns_package(pure_msg, uuid)
 
     def decode_acc_txns_package_msg(self, acc_txns_package_msg):
         pass

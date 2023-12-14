@@ -58,6 +58,18 @@ class DstConNode:
                 self.entry_point(Dst_con)
                 return
 
+    def check_acc_num(self, acc_max_num = DST_NODE_NUM):
+        uuid_lst = [] # all acc node's uuid lst
+        while True:
+            if len(self.trans_msg.acc_neighbor_info) >= acc_max_num:
+                # add uuid lst
+                for item in self.trans_msg.acc_neighbor_info:
+                    uuid_lst.append(item.uuid) # add neighbor
+                index_rank = unit.sort_and_get_positions(uuid_lst)
+                for i, item in enumerate(index_rank, start=0):
+                    self.trans_msg.acc_neighbor_info[i].index = item
+                return
+
     def make_block_body(self):
         new_block_body = message.BlockBodyMsg()
         DigestAccTxns = []
@@ -88,6 +100,13 @@ class DstConNode:
                     # brd new block
                     self.trans_msg.brd_block_to_neighbors(new_block)
                     mine_success = True
+                    # send mTree prf to all acc nodes
+                    mTree = new_block_body.info
+                    block_index = new_block.index
+                    for index, acc_neighbor_uuid in enumerate(self.txns_pool.sender_id, start=0):
+                        acc_port = self.trans_msg.find_neighbor_via_uuid(acc_neighbor_uuid)
+                        new_msg = (mTree[index], block_index)
+                        self.trans_msg.tcp_send(other_tcp_port=acc_port, data_to_send=new_msg, msg_type="MTreeProof")
                     break # return this round mine
             if mine_success:
                 print('Mine success and brd new block to neighbors!')
@@ -120,19 +139,22 @@ class DstConNode:
         self.trans_msg.brd_hello_to_neighbors(addr=self.con_node.addr, node_type=self.node_type) # say hello when init
         # listen_p2p thread listening hello tcp msg from network
         listen_p2p = daemon_thread_builder(self.trans_msg.tcp_receive)
-        # check acc node num
+        # check con and acc node num
         check_con_num = daemon_thread_builder(self.check_con_num)
+        check_acc_num = daemon_thread_builder(self.check_acc_num)
         # check whether packages in txns pool reach the max line
         monitor_txns_pool = daemon_thread_builder(self.monitor_txns_pool)
 
         listen_brd.start()
         listen_p2p.start()
         check_con_num.start()
+        check_acc_num.start()
         monitor_txns_pool.start()
 
         listen_brd.join()
         listen_p2p.join()
         check_con_num.join()
+        check_acc_num.join()
         monitor_txns_pool.join()
 
 ############################################

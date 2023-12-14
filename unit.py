@@ -8,14 +8,16 @@ import re
 class txnsPool:
     def __init__(self):
         self.pool = [] # (accTxn's Digest, acc's sig for hash, acc's addr, acc's ID)
+        self.sender_id = []
 
     def freshPool(self, accounts, accTxns):
         for i in range(len(accTxns)):
             accTxns[i].sig_accTxn(accounts[i].privateKey) # 对accTxn进行签名
             self.pool.append(copy.deepcopy((accTxns[i].Digest, accTxns[i].Signature, accounts[i].addr, accounts[i].id)))
 
-    def add_acc_txns_package(self, acc_txns_package): # this func is designed for DST!
+    def add_acc_txns_package(self, acc_txns_package, uuid): # this func is designed for DST!
         self.pool.append(acc_txns_package)
+        self.sender_id.append(uuid)
 
     def check_is_repeated_package(self, acc_txns_package):
         if self.pool == []:
@@ -30,6 +32,7 @@ class txnsPool:
 
     def clearPool(self):
         self.pool = []
+        self.sender_id = []
 
 class checkedVPBList:
     def __init__(self):

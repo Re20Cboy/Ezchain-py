@@ -697,11 +697,44 @@ class Account:
         self.verifyStorageCostList.append(PrfSize)
         
         return True
-        
+
         def generate_txn_prf_when_use(self, begin_index, end_index): # begin_index, end_index respectively indicate the block number where this txn starts and ends in this account
             # proof = Original proof + Newly generated proof (proof within this account period)
             # Data structure of proof unit: (Block number, mTree proof)
             # Generate new proof (proof within this account period)
             new_proof = []
             pass
-        
+
+    def update_VPB_pairs_dst(self, mTree_proof, block_index):
+        sender = self.addr  # sender的account类型为self.accounts[i]
+        # 提取senderTxns中的每个交易涉及到的每个值
+        owner = sender
+        ownerAccTxnsList = self.accTxns
+        ownerMTreePrfList = mTree_proof
+        costValueIndex = []  # 用于记录本轮中所有参与交易的值的VPB对的index
+
+        VList = [t[0] for t in self.ValuePrfBlockPair]
+        costedValueAndRecipeList = self.costedValuesAndRecipes
+        for (costedV, recipient) in costedValueAndRecipeList:  # 账户本轮花费的值
+            for item, V in enumerate(VList, start=0):  # 账户当前持有的值
+                if V.isSameValue(costedV):
+                    prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
+                                             ownerMTreePrfList=ownerMTreePrfList)
+                    self.ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
+                    self.ValuePrfBlockPair[item][2].append(copy.deepcopy(block_index))
+                    costValueIndex.append(item)
+                    # 测试是否有重复值加入
+                    test = self.accounts[i].ValuePrfBlockPair[item][2]
+                    if len(test) > 2 and test[-1] == test[-2]:
+                        raise ValueError("发现VPB添加错误！！！！")
+
+        for j, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
+            if j not in costValueIndex:
+                prfUnit = unit.ProofUnit(owner=owner, ownerAccTxnsList=ownerAccTxnsList,
+                                         ownerMTreePrfList=ownerMTreePrfList)
+                self.ValuePrfBlockPair[j][1].add_prf_unit(prfUnit)
+                self.ValuePrfBlockPair[j][2].append(copy.deepcopy(block_index))
+                # 测试是否有重复值加入
+                test = self.ValuePrfBlockPair[j][2]
+                if len(test) > 2 and test[-1] == test[-2]:
+                    raise ValueError("发现VPB添加错误！！！！")
