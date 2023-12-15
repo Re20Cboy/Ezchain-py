@@ -44,14 +44,14 @@ def daemon_thread_builder(target, args=()) -> threading.Thread:
     return th
 
 class NeighborInfo(object):
-    def __init__(self, ip="127.0.0.1", tcp_port=None, uuid=None, addr=None, node_type=None):
+    def __init__(self, ip="127.0.0.1", tcp_port=None, uuid=None, addr=None, node_type=None, pk=None):
         self.ip = ip
         self.tcp_port = tcp_port
         self.uuid = uuid
         self.addr = addr
         self.node_type = node_type
         self.index = None
-        self.pk_addr = None
+        self.pk = pk
 
 class TransMsg:
     def __init__(self, node_type):
@@ -129,6 +129,12 @@ class TransMsg:
         for neighbor in self.neighbor_info:
             if neighbor.addr == addr:
                 return neighbor.tcp_port
+        return None
+
+    def find_neighbor_pk_via_uuid(self, uuid):
+        for neighbor in self.neighbor_info:
+            if neighbor.uuid == uuid:
+                return neighbor.pk
         return None
 
     def check_is_self(self, msg):
@@ -234,10 +240,10 @@ class TransMsg:
         new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
         self.add_neighbor(new_neighbor)"""
 
-        (uuid, port, addr, node_type) = self.decode_hello_msg(pure_msg)
+        (uuid, port, addr, node_type, pk) = self.decode_hello_msg(pure_msg)
         # print_blue("Recv Hello msg, add new neighbor...")
         # process logic of recv hello msg:
-        new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
+        new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type, pk=pk)
         self.add_neighbor(new_neighbor)
 
     def tcp_MTree_proof_process(self, pure_msg, acc_node):
@@ -246,15 +252,17 @@ class TransMsg:
         try:
             acc_node.account.update_VPB_pairs_dst(mTreePrf, block_index)
         except Exception as e:
-            # 如果出错则报错
-            raise RuntimeError("An error occurred while running acc_node.update_VPB_pairs_dst: " + str(e))
+            raise RuntimeError("An error occurred in acc_node.update_VPB_pairs_dst: " + str(e))
         print_green('Update VPB pair success.')
         acc_node.send_package_flag += 0.5
         # send VPB pairs to recipient
         recipient_addr, need_send_vpb_index = acc_node.account.send_VPB_pairs_dst()
-        for item in recipient_addr:
+        for index, item in enumerate(recipient_addr):
             recipient_port = self.find_neighbor_port_via_addr(item)
-            # todo:...
+            need_send_vpb = []
+            for i in need_send_vpb_index[index]:
+                need_send_vpb.append(acc_node.account.ValuePrfBlockPair[i])
+            self.tcp_send(other_tcp_port=recipient_port, data_to_send=need_send_vpb, msg_type="VPBPair")
 
 
     def tcp_send(self, other_tcp_port, data_to_send, msg_type, other_ip="127.0.0.1"): # local test, thus other_ip="127.0.0.1"
@@ -284,9 +292,10 @@ class TransMsg:
         port = decoded_msg[3]
         addr = decoded_msg[5]
         node_type = decoded_msg[7]
-        return uuid, port, addr, node_type
+        pk = bytes.fromhex(decoded_msg[9])
+        return uuid, port, addr, node_type, pk
 
-    def listen_brd(self, my_addr, my_type, my_local_chain, con_node, acc_node):
+    def listen_brd(self, my_addr, my_type, my_local_chain, my_pk, con_node, acc_node):
         while True:
             received_compressed_msg, (ip, port) = self.client_tcp.recvfrom(8192)  # max: 4096 Bytes
             # decompress recv msg
@@ -312,18 +321,18 @@ class TransMsg:
                 # enter diff process func
                 if msg_type == 'Hello':
                     hello_msg_process = daemon_thread_builder(
-                        self.hello_msg_process, args=(my_addr, my_type, pure_msg, ))
+                        self.hello_msg_process, args=(my_addr, my_type, my_pk, pure_msg, ))
                     hello_msg_process.start()
                     hello_msg_process.join()
                 elif msg_type == 'Block':
                     if self.node_type == "con": # con node process this msg, acc node ignore it.
                         block_msg_process = daemon_thread_builder(self.block_msg_process, args=(
-                            my_local_chain, my_type, pure_msg, con_node, None))
+                            my_local_chain, my_type, uuid, pure_msg, con_node, None))
                         block_msg_process.start()
                         block_msg_process.join()
                     elif self.node_type == "acc":
                         block_msg_process = daemon_thread_builder(self.block_msg_process, args=(
-                            my_local_chain, my_type, pure_msg, None, acc_node))
+                            my_local_chain, my_type, uuid, pure_msg, None, acc_node))
                         block_msg_process.start()
                         block_msg_process.join()
                 elif msg_type == 'AccTxnsPackage':
@@ -336,27 +345,33 @@ class TransMsg:
                     print_red('Not Find this msg_type: ' + msg_type)
                     pass
 
-    def hello_msg_process(self, my_addr, my_type, pure_msg):
-        (uuid, port, addr, node_type) = self.decode_hello_msg(pure_msg)
+    def hello_msg_process(self, my_addr, my_type, my_pk, pure_msg):
+        (uuid, port, addr, node_type, pk) = self.decode_hello_msg(pure_msg)
         # print_blue("Recv Hello msg, add new neighbor...")
         # process logic of recv hello msg:
-        new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
+        new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type, pk=pk)
         self.add_neighbor(new_neighbor)
         # create self info for new neighbor
         my_uuid = "uuid: " + str(self.node_uuid)
         my_port = "port: " + str(self.self_port)
         my_addr_2 = "addr: " + str(my_addr)
         my_type_2 = "node_type: " + my_type
-        hello_msg = my_uuid + " " + my_port + " " + my_addr_2 + " " + my_type_2
+        my_pk_2 = "pk: " + my_pk.hex()
+        hello_msg = my_uuid + " " + my_port + " " + my_addr_2 + " " + my_type_2 + " " + my_pk_2
         """msg_prefix = "node_uuid: " + str(self.node_uuid) + " ON " + str(self.self_port) + " Hello MSG: "
         new_msg_info = msg_prefix + hello_msg"""
         # send self info to new neighbor
         # print_blue("send tcp msg to " + port + " from " + my_port + ": " + str(new_msg_info))
         self.tcp_send(other_tcp_port=port, data_to_send=hello_msg, msg_type="Hello")
 
-    def block_msg_process(self, my_local_chain, my_type, pure_msg, con_node, acc_node):
+    def block_msg_process(self, my_local_chain, my_type, uuid, pure_msg, con_node, acc_node):
         block = pure_msg
         # print_blue("Recv Block msg, add new block...")
+        miner_pk = self.find_neighbor_pk_via_uuid(uuid)
+        if miner_pk == None:
+            print('No miner pk find!')
+            return
+
         if block.index == 0: # is genesis block
             if len(my_local_chain.chain) == 0: # local chain is empty
                 my_local_chain.add_block(block)
@@ -365,12 +380,26 @@ class TransMsg:
                 # print_yellow('Ignore this GENESIS block.')
                 pass
         elif my_local_chain.is_valid_block(block): # valid block, otherwise ignore this block
+
             if my_type == "con": # con node
-                con_node.recv_new_block_flag = 1
-            my_local_chain.add_block(block)
-            print_green("Success add this block: "+block.block_to_short_str()+", now my chain's len = " + str(len(my_local_chain.chain)))
+                if con_node.con_node.check_block_sig(block, block.sig, miner_pk):
+                    con_node.recv_new_block_flag = 1
+                    my_local_chain.add_block(block)
+                    print_green(
+                        "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
+                            len(my_local_chain.chain)))
+                else:
+                    print('block sig illegal!')
+
             if my_type == "acc": # acc node
-                acc_node.send_package_flag += 0.5 # wait for vpb update, send_package_flag can be 1
+                if acc_node.account.check_block_sig(block, block.sig, miner_pk):
+                    my_local_chain.add_block(block)
+                    print_green(
+                        "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
+                            len(my_local_chain.chain)))
+                    acc_node.send_package_flag += 0.5 # wait for vpb update, send_package_flag can be 1
+                else:
+                    print('block sig illegal!')
 
         else:
             print_red("Ignore this block.")
@@ -386,13 +415,14 @@ class TransMsg:
     def listen_acc_txns_package(self, pure_msg):
         pass
 
-    def brd_hello_to_neighbors(self, addr, node_type):
+    def brd_hello_to_neighbors(self, addr, node_type, pk):
         print_blue('Init and brd hello msg to neighbors!')
         uuid = "uuid: " + str(self.node_uuid)
         port = "port: " + str(self.self_port)
         addr_2 = "addr: " + str(addr)
         node_type_2 = "node_type: " + node_type
-        hello_msg = uuid + " " + port + " " + addr_2 + " " + node_type_2
+        pk_2 = "pk: " + pk.hex()
+        hello_msg = uuid + " " + port + " " + addr_2 + " " + node_type_2 + " " + pk_2
         self.broadcast(msg=hello_msg, msg_type='Hello')
 
     def brd_block_to_neighbors(self, block):

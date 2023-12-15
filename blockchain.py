@@ -40,7 +40,7 @@ class Blockchain:
             print(f"Timestamp: {block.time}")
             print(f"Miner: {block.miner}")
             if block.index != 0:
-                print(f"Previous Hash: {block.pre_hash}")
+                print(f"Previous Hash: {block.pre_hash.hexdigest()}")
             else:
                 print(f"Previous Hash: {block.pre_hash}")
             print(f"Merkle Tree Root: {block.m_tree_root}")

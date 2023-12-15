@@ -58,6 +58,8 @@ class Block:
         Convert the block into a string representation for hashing and signing.
         The signature is not included in this representation.
 
+        DO NOT CHANGE THIS FUNC !!!!! otherwise, sig and check_sig ERR!!
+
         Returns:
             str: The string representation of the block.
         """
@@ -68,8 +70,7 @@ class Block:
         block_str += f"Time: {str(self.time)}\n"
         block_str += f"Miner: {self.miner}\n"
         block_str += f"Previous Hash: {self.pre_hash}\n"
-        block_str += f"Sig: {self.sig}\n"
-        return block_str
+        return block_str # no sig_to_str !!!
 
     def block_to_short_str(self):
         block_str = f"Index: {self.index}, Miner: {self.miner}, Pre Hash: {self.pre_hash}"

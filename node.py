@@ -183,6 +183,7 @@ class Node:
             # loadPKPath = NODE_PUBLIC_KEY_PATH + "public_key_node_"+str(uncheckedBlock.miner)+".pem"
             minerPK = PKList[uncheckedBlock.miner] # 获取miner的公钥
             if not self.check_block_sig(block=uncheckedBlock, signature=uncheckedSig, load_public_key=minerPK):
+                self.sig_block(uncheckedBlock)
                 raise ValueError("区块签名检测错误！")
             # todo: 2. Nonce验证； 3. 数据格式验证
             # todo: 待完成

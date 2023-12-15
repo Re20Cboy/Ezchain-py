@@ -13,6 +13,10 @@ from const import *
 import transaction
 import unit
 from utils import ensure_directory_exists
+from collections import defaultdict
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
 
 
 class Account:
@@ -38,6 +42,7 @@ class Account:
         self.accRoundVPBCostList = []  # Records the storage cost of VPB for this node each round
         self.accRoundCKCostList = []  # Records the storage cost of CK for this node each round
         self.accRoundAllCostList = []  # Records the total storage cost of VPB+CK for this node each round
+        self.delete_vpb_list = []
 
     def test(self):
         test = copy.deepcopy(self.ValuePrfBlockPair)
@@ -705,6 +710,26 @@ class Account:
             new_proof = []
             pass
 
+    def check_block_sig(self, block, signature, load_public_key):
+        # 从公钥路径加载公钥
+        # with open(load_public_key_path, "rb") as key_file:
+        public_key = load_pem_public_key(load_public_key)
+        # 使用SHA256哈希算法计算区块的哈希值
+        block_hash = hashes.Hash(hashes.SHA256())
+        block_hash.update(block.block_to_str().encode('utf-8'))
+        digest = block_hash.finalize()
+        signature_algorithm = ec.ECDSA(hashes.SHA256())
+        # 验证签名
+        try:
+            public_key.verify(
+                signature,
+                digest,
+                signature_algorithm
+            )
+            return True
+        except:
+            return False
+
     def update_VPB_pairs_dst(self, mTree_proof, block_index):
         sender = self.addr  # sender的account类型为self.accounts[i]
         # 提取senderTxns中的每个交易涉及到的每个值
@@ -739,6 +764,15 @@ class Account:
                 if len(test) > 2 and test[-1] == test[-2]:
                     raise ValueError("发现VPB添加错误！！！！")
 
+    def tool_for_send_VPB_pairs_dst(self, recipients, vpb_index):
+        merged_dict = defaultdict(list)
+        for index, value in enumerate(recipients):
+            merged_dict[value].append(vpb_index[index])
+        unique_recipients = list(merged_dict.keys())
+        new_vpb_index = [merged_dict[element] for element in unique_recipients]
+        return unique_recipients, new_vpb_index
+
+
     def send_VPB_pairs_dst(self):
         del_value_index = []  # Record the index of the value that needs to be deleted
         recipient_addr = []
@@ -753,6 +787,8 @@ class Account:
                 del_value_index.append(j)
         # 将需要删除的位置按照降序排序，以免删除元素之后影响后续元素的索引
         del_value_index.sort(reverse=True)
-        for i in del_value_index:
-            self.delete_VPBpair(i)
-        return recipient_addr, need_send_vpb_index
+        self.delete_vpb_list = del_value_index # wait for send
+        """for i in del_value_index:
+            self.delete_VPBpair(i)"""
+        (unique_recipients, new_vpb_index) = self.tool_for_send_VPB_pairs_dst(recipient_addr, need_send_vpb_index)
+        return unique_recipients, new_vpb_index

@@ -124,9 +124,9 @@ class DstAcc:
         self.print_self_info()
         # init (get all node's addr, uuid, ...)
         # listen_hello thread listening hello brd msg from network
-        listen_brd = daemon_thread_builder(self.trans_msg.listen_brd, args=(self.account.addr, self.node_type, self.blockchain, None, self, )) # msg_type='Hello'
+        listen_brd = daemon_thread_builder(self.trans_msg.listen_brd, args=(self.account.addr, self.node_type, self.blockchain, self.account.publicKey, None, self, )) # msg_type='Hello'
         # say hello to other nodes when init
-        self.trans_msg.brd_hello_to_neighbors(addr=self.account.addr, node_type=self.node_type) # say hello when init
+        self.trans_msg.brd_hello_to_neighbors(addr=self.account.addr, node_type=self.node_type, pk=self.account.publicKey) # say hello when init
         # listen_p2p thread listening hello tcp msg from network
         listen_p2p = daemon_thread_builder(self.trans_msg.tcp_receive, args=(self, ))
         # check acc node num
