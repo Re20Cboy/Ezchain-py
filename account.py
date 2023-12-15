@@ -724,7 +724,7 @@ class Account:
                     self.ValuePrfBlockPair[item][2].append(copy.deepcopy(block_index))
                     costValueIndex.append(item)
                     # 测试是否有重复值加入
-                    test = self.accounts[i].ValuePrfBlockPair[item][2]
+                    test = self.ValuePrfBlockPair[item][2]
                     if len(test) > 2 and test[-1] == test[-2]:
                         raise ValueError("发现VPB添加错误！！！！")
 
@@ -738,3 +738,21 @@ class Account:
                 test = self.ValuePrfBlockPair[j][2]
                 if len(test) > 2 and test[-1] == test[-2]:
                     raise ValueError("发现VPB添加错误！！！！")
+
+    def send_VPB_pairs_dst(self):
+        del_value_index = []  # Record the index of the value that needs to be deleted
+        recipient_addr = []
+        need_send_vpb_index = []
+        for j, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
+            latestOwner = VPBpair[1].prfList[-1].owner
+            if latestOwner != self.addr:  # owner不再是自己，则传输给新owner，并删除本地备份
+                # send this vpb to recipient
+                recipient_addr.append(latestOwner)
+                need_send_vpb_index.append(j)
+                # acc删除本地VPB备份，不能直接删除，否则循环中已加载的value会出问题
+                del_value_index.append(j)
+        # 将需要删除的位置按照降序排序，以免删除元素之后影响后续元素的索引
+        del_value_index.sort(reverse=True)
+        for i in del_value_index:
+            self.delete_VPBpair(i)
+        return recipient_addr, need_send_vpb_index

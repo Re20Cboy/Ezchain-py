@@ -51,6 +51,7 @@ class NeighborInfo(object):
         self.addr = addr
         self.node_type = node_type
         self.index = None
+        self.pk_addr = None
 
 class TransMsg:
     def __init__(self, node_type):
@@ -102,10 +103,10 @@ class TransMsg:
             elif neighbor_info_instance.node_type == 'con':
                 self.con_neighbor_info.append(neighbor_info_instance)
             self.neighbor_info.append(neighbor_info_instance)
-            print_green('Success add neighbor! Now I have '+str(len(self.neighbor_info))+' neighbors')
+            print_green('Success add neighbor! Now I have '+str(len(self.neighbor_info))+' neighbors (acc: ' + str(len(self.acc_neighbor_info)) + ' and con: ' + str(len(self.con_neighbor_info)) + ').')
             # self.print_neighbors()
 
-    def find_neighbor_via_uuid(self, uuid):
+    def find_neighbor_port_via_uuid(self, uuid):
         for neighbor in self.neighbor_info:
             if neighbor.uuid == uuid:
                 return neighbor.tcp_port
@@ -122,6 +123,12 @@ class TransMsg:
         for index, item in enumerate(self.neighbor_info, start=0):
             if item.uuid == uuid:
                 return index
+        return None
+
+    def find_neighbor_port_via_addr(self, addr):
+        for neighbor in self.neighbor_info:
+            if neighbor.addr == addr:
+                return neighbor.tcp_port
         return None
 
     def check_is_self(self, msg):
@@ -186,7 +193,7 @@ class TransMsg:
         else:
             return "no matched word"
 
-    def tcp_receive(self):
+    def tcp_receive(self, acc_node=None):
         while True:
             conn, addr = self.server_tcp.accept()
             decompressed_data = gzip.decompress(conn.recv(8192))
@@ -209,8 +216,8 @@ class TransMsg:
 
             if msg_type == "Hello":
                 self.tcp_hello_process(pure_msg)
-            if msg_type == "MtreeProof":
-                self.tcp_MTree_proof_process(pure_msg)
+            if msg_type == "MTreeProof":
+                self.tcp_MTree_proof_process(pure_msg, acc_node)
 
     def tcp_hello_process(self, pure_msg):
         """# define prefix
@@ -228,13 +235,27 @@ class TransMsg:
         self.add_neighbor(new_neighbor)"""
 
         (uuid, port, addr, node_type) = self.decode_hello_msg(pure_msg)
-        print_blue("Recv Hello msg, add new neighbor...")
+        # print_blue("Recv Hello msg, add new neighbor...")
         # process logic of recv hello msg:
         new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
         self.add_neighbor(new_neighbor)
 
-    def tcp_MTree_proof_process(self, pure_msg):
+    def tcp_MTree_proof_process(self, pure_msg, acc_node):
         # update vpb
+        (mTreePrf, block_index) = pure_msg
+        try:
+            acc_node.account.update_VPB_pairs_dst(mTreePrf, block_index)
+        except Exception as e:
+            # 如果出错则报错
+            raise RuntimeError("An error occurred while running acc_node.update_VPB_pairs_dst: " + str(e))
+        print_green('Update VPB pair success.')
+        acc_node.send_package_flag += 0.5
+        # send VPB pairs to recipient
+        recipient_addr, need_send_vpb_index = acc_node.account.send_VPB_pairs_dst()
+        for item in recipient_addr:
+            recipient_port = self.find_neighbor_port_via_addr(item)
+            # todo:...
+
 
     def tcp_send(self, other_tcp_port, data_to_send, msg_type, other_ip="127.0.0.1"): # local test, thus other_ip="127.0.0.1"
         """
@@ -317,7 +338,7 @@ class TransMsg:
 
     def hello_msg_process(self, my_addr, my_type, pure_msg):
         (uuid, port, addr, node_type) = self.decode_hello_msg(pure_msg)
-        print_blue("Recv Hello msg, add new neighbor...")
+        # print_blue("Recv Hello msg, add new neighbor...")
         # process logic of recv hello msg:
         new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
         self.add_neighbor(new_neighbor)
@@ -327,11 +348,11 @@ class TransMsg:
         my_addr_2 = "addr: " + str(my_addr)
         my_type_2 = "node_type: " + my_type
         hello_msg = my_uuid + " " + my_port + " " + my_addr_2 + " " + my_type_2
-        msg_prefix = "node_uuid: " + str(self.node_uuid) + " ON " + str(self.self_port) + " Hello MSG: "
-        new_msg_info = msg_prefix + hello_msg
+        """msg_prefix = "node_uuid: " + str(self.node_uuid) + " ON " + str(self.self_port) + " Hello MSG: "
+        new_msg_info = msg_prefix + hello_msg"""
         # send self info to new neighbor
         # print_blue("send tcp msg to " + port + " from " + my_port + ": " + str(new_msg_info))
-        self.tcp_send(other_tcp_port=port, data_to_send=new_msg_info, msg_type="Hello")
+        self.tcp_send(other_tcp_port=port, data_to_send=hello_msg, msg_type="Hello")
 
     def block_msg_process(self, my_local_chain, my_type, pure_msg, con_node, acc_node):
         block = pure_msg
@@ -349,7 +370,7 @@ class TransMsg:
             my_local_chain.add_block(block)
             print_green("Success add this block: "+block.block_to_short_str()+", now my chain's len = " + str(len(my_local_chain.chain)))
             if my_type == "acc": # acc node
-                acc_node.send_package_flag = 1
+                acc_node.send_package_flag += 0.5 # wait for vpb update, send_package_flag can be 1
 
         else:
             print_red("Ignore this block.")
@@ -375,12 +396,6 @@ class TransMsg:
         self.broadcast(msg=hello_msg, msg_type='Hello')
 
     def brd_block_to_neighbors(self, block):
-        if block.index == 0:
-            # print_blue('Brd GENESIS block to all nodes!')
-            pass
-        else:
-            # print_blue('Brd block to all nodes!')
-            pass
         self.broadcast(msg=block, msg_type='Block')
 
     def brd_acc_txns_package_to_con_node(self, acc_txns_package):

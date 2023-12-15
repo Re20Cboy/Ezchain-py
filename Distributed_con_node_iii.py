@@ -27,8 +27,7 @@ class DstConNode:
         self.node_type = "con" # con for consensus
         self.txns_pool = unit.txnsPool() # for collect acc txns packages
         self.mine_lock = threading.Lock() # lock for func mine
-        self.recv_new_block_flag = False
-
+        self.recv_new_block_flag = 0
 
     def print_self_info(self):
         print(f"IP: {self.trans_msg.local_ip}")
@@ -36,8 +35,6 @@ class DstConNode:
         print(f"UUID: {self.trans_msg.node_uuid}")
         print(f"Address: {self.con_node.addr}")
         print("Node Type: con node")
-        print(id(self.trans_msg.node_uuid))
-        print(id(self.recv_new_block_flag))
         print("*" * 50)
 
     def check_con_num(self, con_max_num = DST_NODE_NUM):
@@ -61,6 +58,18 @@ class DstConNode:
                 self.entry_point(Dst_con)
                 return
 
+    def check_acc_num(self, acc_max_num = DST_NODE_NUM):
+        uuid_lst = [] # all acc node's uuid lst
+        while True:
+            if len(self.trans_msg.acc_neighbor_info) >= acc_max_num:
+                # add uuid lst
+                for item in self.trans_msg.acc_neighbor_info:
+                    uuid_lst.append(item.uuid) # add neighbor
+                index_rank = unit.sort_and_get_positions(uuid_lst)
+                for i, item in enumerate(index_rank, start=0):
+                    self.trans_msg.acc_neighbor_info[i].index = item
+                return
+
     def make_block_body(self):
         new_block_body = message.BlockBodyMsg()
         DigestAccTxns = []
@@ -77,9 +86,10 @@ class DstConNode:
 
     def mine(self):
         with self.mine_lock:
-            self.recv_new_block_flag = False
+            self.recv_new_block_flag = 0
             print('Begin mine...')
-            while not self.recv_new_block_flag:
+            mine_success = False
+            while self.recv_new_block_flag == 0:
                 time.sleep(ONE_HASH_TIME) # simulate one hash compute cost
                 if random.random() < ONE_HASH_SUCCESS_RATE: # success mine!
                     # make block body via acc txns packages
@@ -88,10 +98,23 @@ class DstConNode:
                     # make new block
                     new_block = self.con_node.create_new_block_for_dst()
                     # brd new block
-                    print('Mine success and brd new block to neighbors!')
                     self.trans_msg.brd_block_to_neighbors(new_block)
+                    mine_success = True
+                    # send mTree prf to all acc nodes
+                    mTree = new_block_body.info
+                    block_index = new_block.index
+                    for index, acc_neighbor_uuid in enumerate(self.txns_pool.sender_id, start=0):
+                        acc_port = self.trans_msg.find_neighbor_port_via_uuid(acc_neighbor_uuid)
+                        if acc_port == None:
+                            raise ValueError('Not find valid acc port!')
+                        new_msg = (mTree.prfList[index], block_index)
+                        self.trans_msg.tcp_send(other_tcp_port=acc_port, data_to_send=new_msg, msg_type="MTreeProof")
                     break # return this round mine
-            print('Recv new block, kill this mine().')
+            if mine_success:
+                print('Mine success and brd new block to neighbors!')
+            else:
+                print('Recv new block, kill this mine().')
+            return
 
     def wait_for_genesis_block(self):
         while True:
@@ -113,24 +136,27 @@ class DstConNode:
         self.print_self_info()
         # init (get all node's addr, uuid, ...)
         # listen_hello thread listening hello brd msg from network
-        listen_brd = daemon_thread_builder(self.trans_msg.listen_brd, args=(self.con_node.addr, self.node_type, self.con_node.blockchain, self.recv_new_block_flag, self.txns_pool, None, )) # msg_type='Hello'
+        listen_brd = daemon_thread_builder(self.trans_msg.listen_brd, args=(self.con_node.addr, self.node_type, self.con_node.blockchain, self, None, )) # msg_type='Hello'
         # say hello to other nodes when init
         self.trans_msg.brd_hello_to_neighbors(addr=self.con_node.addr, node_type=self.node_type) # say hello when init
         # listen_p2p thread listening hello tcp msg from network
         listen_p2p = daemon_thread_builder(self.trans_msg.tcp_receive)
-        # check acc node num
+        # check con and acc node num
         check_con_num = daemon_thread_builder(self.check_con_num)
+        check_acc_num = daemon_thread_builder(self.check_acc_num)
         # check whether packages in txns pool reach the max line
         monitor_txns_pool = daemon_thread_builder(self.monitor_txns_pool)
 
         listen_brd.start()
         listen_p2p.start()
         check_con_num.start()
+        check_acc_num.start()
         monitor_txns_pool.start()
 
         listen_brd.join()
         listen_p2p.join()
         check_con_num.join()
+        check_acc_num.join()
         monitor_txns_pool.join()
 
 ############################################
