@@ -48,7 +48,7 @@ class DstAcc:
             selected_numbers = numbers[:k]
             return selected_numbers
 
-        neighbors_num = len(self.trans_msg.neighbor_info)
+        neighbors_num = len(self.trans_msg.acc_neighbor_info)
         if neighbors_num > 0:
             recipients_num = random.randint(1, neighbors_num)
         else:
@@ -56,7 +56,7 @@ class DstAcc:
         selected_nums = select_k_numbers(neighbors_num, recipients_num)
         selected_neighbors = []
         for item in selected_nums:
-            selected_neighbors.append(self.trans_msg.neighbor_info[item])
+            selected_neighbors.append(self.trans_msg.acc_neighbor_info[item])
 
         acc_txns = self.account.random_generate_txns(selected_neighbors)
         tmp_acc_txns_package = transaction.AccountTxns(self.account.addr, self.global_id, acc_txns)
@@ -124,11 +124,11 @@ class DstAcc:
         self.print_self_info()
         # init (get all node's addr, uuid, ...)
         # listen_hello thread listening hello brd msg from network
-        listen_brd = daemon_thread_builder(self.trans_msg.listen_brd, args=(self.account.addr, self.node_type, self.blockchain, self.account.publicKeyPath, None, self, )) # msg_type='Hello'
+        listen_brd = daemon_thread_builder(self.trans_msg.listen_brd, args=(self.account.addr, self.node_type, self.blockchain, self.account.publicKey, None, self, )) # msg_type='Hello'
         # say hello to other nodes when init
-        self.trans_msg.brd_hello_to_neighbors(addr=self.account.addr, node_type=self.node_type, pk=self.account.publicKeyPath) # say hello when init
+        self.trans_msg.brd_hello_to_neighbors(addr=self.account.addr, node_type=self.node_type, pk=self.account.publicKey) # say hello when init
         # listen_p2p thread listening hello tcp msg from network
-        listen_p2p = daemon_thread_builder(self.trans_msg.tcp_receive, args=(self, ))
+        listen_p2p = daemon_thread_builder(self.trans_msg.tcp_receive, args=(self.blockchain, self, ))
         # check acc node num
         check_acc_num = daemon_thread_builder(self.check_acc_num)
 

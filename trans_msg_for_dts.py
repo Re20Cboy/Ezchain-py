@@ -1,5 +1,6 @@
 import pickle
 import socket
+import time
 import uuid
 import re
 import sys
@@ -199,10 +200,10 @@ class TransMsg:
         else:
             return "no matched word"
 
-    def tcp_receive(self, acc_node=None):
+    def tcp_receive(self, my_chain=None, acc_node=None):
         while True:
             conn, addr = self.server_tcp.accept()
-            decompressed_data = gzip.decompress(conn.recv(8192))
+            decompressed_data = gzip.decompress(conn.recv(10240))
             # decode decompress recv msg
             prefix = " MSG: "
             # find prefix's index
@@ -224,6 +225,11 @@ class TransMsg:
                 self.tcp_hello_process(pure_msg)
             if msg_type == "MTreeProof":
                 self.tcp_MTree_proof_process(pure_msg, acc_node)
+            if msg_type == "VPBPair":
+                self.tcp_VPBPair_process(pure_msg, acc_node, my_chain, uuid, port)
+            if msg_type == "TxnTestResult":
+                self.tcp_txn_test_result_process(pure_msg, acc_node)
+
 
     def tcp_hello_process(self, pure_msg):
         """# define prefix
@@ -254,7 +260,7 @@ class TransMsg:
         except Exception as e:
             raise RuntimeError("An error occurred in acc_node.update_VPB_pairs_dst: " + str(e))
         print_green('Update VPB pair success.')
-        acc_node.send_package_flag += 0.5
+
         # send VPB pairs to recipient
         recipient_addr, need_send_vpb_index = acc_node.account.send_VPB_pairs_dst()
         for index, item in enumerate(recipient_addr):
@@ -264,6 +270,33 @@ class TransMsg:
                 need_send_vpb.append(acc_node.account.ValuePrfBlockPair[i])
             self.tcp_send(other_tcp_port=recipient_port, data_to_send=need_send_vpb, msg_type="VPBPair")
 
+        # start send new package to txn pool
+        acc_node.send_package_flag += 0.4
+
+    def tcp_VPBPair_process(self, pure_msg, acc_node, my_chain, uuid, port):
+        print_yellow('wait 2 sec for new block adding...')
+        time.sleep(2)
+        print_blue('recv VPB msg, testing...')
+        test_flag = True
+        for one_vpb in pure_msg:
+            if not acc_node.account.check_VPBpair(VPBpair=one_vpb, bloomPrf=[], blockchain=my_chain):
+                test_flag = False
+        if test_flag:
+            print_green("Accept this value from " + str(uuid))
+            self.tcp_send(other_tcp_port=port, data_to_send="txn success!", msg_type="TxnTestResult")
+        else:
+            print_red("VPB test fail! reject this value from " + str(uuid))
+            self.tcp_send(other_tcp_port=port, data_to_send="txn fail!", msg_type="TxnTestResult")
+
+    def tcp_txn_test_result_process(self, pure_msg, acc_node):
+        if pure_msg == 'txn success!':
+            acc_node.this_round_success_txns_num += 1
+        if acc_node.this_round_success_txns_num >= acc_node.this_round_txns_num:
+            print_green('All txns confirm! Entry next round.')
+            # clear and flash self data
+            acc_node.clear_and_fresh_info_dst()
+            # start send new package to txn pool
+            acc_node.send_package_flag += 0.1
 
     def tcp_send(self, other_tcp_port, data_to_send, msg_type, other_ip="127.0.0.1"): # local test, thus other_ip="127.0.0.1"
         """

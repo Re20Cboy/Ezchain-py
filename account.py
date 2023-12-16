@@ -772,6 +772,11 @@ class Account:
         new_vpb_index = [merged_dict[element] for element in unique_recipients]
         return unique_recipients, new_vpb_index
 
+    def del_vpb_pair_dst(self):
+        if self.delete_vpb_list != []:
+            for index in self.delete_vpb_list:
+                self.delete_VPBpair(index)
+            self.delete_vpb_list = []
 
     def send_VPB_pairs_dst(self):
         del_value_index = []  # Record the index of the value that needs to be deleted
@@ -792,3 +797,16 @@ class Account:
             self.delete_VPBpair(i)"""
         (unique_recipients, new_vpb_index) = self.tool_for_send_VPB_pairs_dst(recipient_addr, need_send_vpb_index)
         return unique_recipients, new_vpb_index
+
+    def clear_and_fresh_info_dst(self):
+        self.accTxns = []
+        self.accTxnsIndex = None
+        self.costedValuesAndRecipes = []
+        self.recipientList = []
+        # Check for duplicates in vpb of each round
+        # self.test()
+        # Update check points based on this round's VPBpairs
+        self.del_vpb_pair_dst()
+        self.VPBCheckPoints.addAndFreshCheckPoint(self.ValuePrfBlockPair)
+        # Update storage cost information for acc
+        self.freshStorageCost()
