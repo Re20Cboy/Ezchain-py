@@ -17,7 +17,8 @@ DST_NODE_NUM = 2
 
 # Number of simulated accounts
 ACCOUNT_NUM = 5
-DST_ACC_NUM = 2
+
+DST_ACC_NUM = 3
 
 # Number of max packages in con node's txns pool
 MAX_PACKAGES = 2
