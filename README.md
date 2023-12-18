@@ -36,7 +36,7 @@ Python 3.8 or higher.
 ```
 git clone https://github.com/Re20Cboy/Ezchain-py.git
 
-cd Ezchain
+cd Ezchain-py
 
 pip install -r requirements.txt
 ```
