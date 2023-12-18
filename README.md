@@ -24,9 +24,12 @@ Here is the [arXiv link](https://arxiv.org/abs/2312.00281). Cite this work by:
 * Efficient Transaction Confirmation: Strives to keep transaction confirmation delays within one minute.
 * Decentralization and Security: Maintains strict adherence to decentralization principles and ensures robust security​​.
 
-## Running simulation
+## Introduction to run
+This project provides two ways of initialization. The first method is designed to efficiently conduct experimental simulations, observe, and record various metrics of EZchain. All node scripts operate in a centralized manner to maximize the utilization of limited memory for simulating the operation of large-scale networks as much as possible. The second method closely resembles real distributed operation, where individual nodes run as processes with independent ports. Communication between nodes also utilizes UDP and TCP sockets. For convenience, we will refer to the first simulation as NON-DST (DST for distributed) and the second one as DST.
 
-### Environment setup
+### Running simulation (NON-DST)
+
+#### Environment setup
 
 Python 3.8 or higher.
 
@@ -38,7 +41,7 @@ cd Ezchain
 pip install -r requirements.txt
 ```
 
-### Useful configuration options
+#### Useful configuration options
 
 These are some critical configuration options in the project, which can be modified in the `Const.py` file.
 
@@ -53,7 +56,7 @@ These are some critical configuration options in the project, which can be modif
 * HASH_POWER controls the hash computing power, indicating the number of hashes computation performed per second.
 * GENESIS_SENDER and GENESIS_MINER_ID represent genesis sender's address and genesis miner's ID.
 
-### Run
+#### Run
 
 ```
 python3 Ezchain_simulate.py
@@ -63,4 +66,18 @@ or
 
 ```
 ./Ezchain_simulate.py
+```
+
+### Running simulation (DST)
+
+#### Environment setup
+
+Python 3.8 or higher.
+
+```
+git clone https://github.com/Re20Cboy/Ezchain-py.git
+
+cd Ezchain
+
+pip install -r requirements.txt
 ```
