@@ -155,7 +155,7 @@ class TransMsg:
         compressed_msg = gzip.compress(encode_msg)  # zip msg
 
         # encode_msg_size = sys.getsizeof(all_msg)
-        compressed_encode_msg_size = sys.getsizeof(compressed_msg)
+        print_blue("The size of broadcast " + msg_type + " msg is " + str(sys.getsizeof(compressed_msg)) + " bytes.")
         # msg_size = sys.getsizeof(msg)
 
         self.broadcaster_udp.sendto(compressed_msg, ('255.255.255.255', get_broadcast_port()))
@@ -260,6 +260,8 @@ class TransMsg:
         except Exception as e:
             raise RuntimeError("An error occurred in acc_node.update_VPB_pairs_dst: " + str(e))
         print_green('Update VPB pair success.')
+        # updata the block index need to wait.
+        acc_node.this_round_block_index = block_index
 
         # send VPB pairs to recipient
         recipient_addr, need_send_vpb_index = acc_node.account.send_VPB_pairs_dst()
@@ -274,8 +276,13 @@ class TransMsg:
         acc_node.send_package_flag += 0.4
 
     def tcp_VPBPair_process(self, pure_msg, acc_node, my_chain, uuid, port):
-        print_yellow('wait 2 sec for new block adding...')
-        time.sleep(2)
+        while True:
+            if acc_node.this_round_block_index == None or acc_node.this_round_block_index > my_chain.get_latest_block_index():
+                print("Wait 0.5 sec for new block adding...")
+                time.sleep(0.5) # wait 0.5 sec for new block adding...
+            else:
+                break
+
         print_blue('recv VPB msg, testing...')
         test_flag = True
         for one_vpb in pure_msg:
@@ -315,6 +322,9 @@ class TransMsg:
         SENDER.connect((other_ip, int(other_tcp_port)))
         # address = (other_ip, int(other_tcp_port))
         # pickled_data = pickle.dumps(data_to_send)
+        # print the size of compressed msg
+        print_blue("The size of tcp sent " + msg_type + " msg is " + str(sys.getsizeof(compressed_msg)) + " bytes.")
+
         SENDER.send(compressed_msg)
 
         SENDER.close()

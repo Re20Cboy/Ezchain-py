@@ -18,6 +18,9 @@ class Blockchain:
     def get_latest_block_hash(self):
         return self.chain[-1].get_hash()
 
+    def get_latest_block_index(self):
+        return self.chain[-1].get_index()
+
     def is_valid(self): #遍历链看所有块的hash链接是否正确
         for i in range(1, len(self.chain)):
             current_block = self.chain[i]

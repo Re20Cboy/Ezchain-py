@@ -27,6 +27,7 @@ class DstAcc:
         self.send_package_flag = 0
         self.this_round_txns_num = 0
         self.this_round_success_txns_num = 0
+        self.this_round_block_index = None
 
     def send_txns_to_txn_pool(self):
         pass
@@ -44,6 +45,7 @@ class DstAcc:
     def clear_and_fresh_info_dst(self):
         self.this_round_txns_num = 0
         self.this_round_success_txns_num = 0
+        self.this_round_block_index = None
         self.account.clear_and_fresh_info_dst()
 
     def random_generate_acc_txns_package(self):
