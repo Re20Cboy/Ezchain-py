@@ -361,7 +361,7 @@ class EZsimulate:
         return verifyCostList
 
     def showPerformance(self):
-        current_time = datetime.datetime.now().strftime("%Y%m%d%H%M%S")  # 获取当前时间
+        current_time = datetime.now().strftime("%Y%m%d%H%M%S")  # 获取当前时间
         current_const = str(NODE_NUM)+'Nodes_'+str(ACCOUNT_NUM)+'Accs_'+str(SIMULATE_ROUND)+'Rounds'
         # # # # # # # # 绘制TPS图像 # # # # # # # #
         # 创建一个Figure对象和一个子图

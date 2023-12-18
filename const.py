@@ -16,7 +16,7 @@ NODE_NUM = 5
 DST_NODE_NUM = 3
 
 # Number of simulated accounts
-ACCOUNT_NUM = 10
+ACCOUNT_NUM = 5
 DST_ACC_NUM = 3
 
 # Number of max packages in con node's txns pool
@@ -31,7 +31,7 @@ ONE_HASH_SUCCESS_RATE = 0.005
 PICK_TXNS_NUM = int(ACCOUNT_NUM * ACCOUNT_NUM / 2)
 
 # Number of mining rounds
-SIMULATE_ROUND = 5
+SIMULATE_ROUND = 3
 
 # Network bandwidth (bytes)
 BANDWIDTH = 1024 * 1024 * 1
