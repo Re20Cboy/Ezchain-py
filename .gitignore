@@ -164,3 +164,6 @@ node_private_key/
 node_public_key/
 account_private_key/
 account_public_key/
+
+SimulateCSV/
+SimulateFig/

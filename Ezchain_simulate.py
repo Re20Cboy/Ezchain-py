@@ -19,6 +19,7 @@ import datetime #系统时间作为文件名，防止记录时同文件名覆盖
 import cProfile # 分析性能
 import csv #将实验结果存储在csv表格中
 from datetime import datetime
+from utils import ensure_directory_exists
 
 class EZsimulate:
     def __init__(self):
@@ -381,8 +382,10 @@ class EZsimulate:
         # 显示网格线
         ax1.grid(True)
         # 保存图像到本地文件
+        ensure_directory_exists("./SimulateFig/")
         plt.savefig('SimulateFig/TPS图像_{}_{}.png'.format(current_time, current_const))
         ### 存储到csv表格中 ###
+        ensure_directory_exists("./SimulateCSV/")
         csv_name = 'SimulateCSV/TPS_{}_{}.csv'.format(current_time, current_const)
         # 打开一个CSV文件进行写入
         with open(csv_name, 'w', newline='') as file:
