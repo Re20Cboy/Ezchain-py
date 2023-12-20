@@ -45,7 +45,7 @@ def daemon_thread_builder(target, args=()) -> threading.Thread:
     return th
 
 class NeighborInfo(object):
-    def __init__(self, ip="127.0.0.1", tcp_port=None, uuid=None, addr=None, node_type=None, pk=None):
+    def __init__(self, ip, tcp_port=None, uuid=None, addr=None, node_type=None, pk=None):
         self.ip = ip
         self.tcp_port = tcp_port
         self.uuid = uuid
@@ -70,16 +70,19 @@ class TransMsg:
         self.generate_init_info()
 
     def generate_init_info(self):
+        # set IP addr
+        self.local_ip = socket.gethostbyname(socket.gethostname())
+
         # Server TCP
         self.server_tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.server_tcp.bind(('127.0.0.1', 0))
+        self.server_tcp.bind((self.local_ip, 0))
         self.server_tcp.listen()
 
         # Broadcaster UDP
         self.broadcaster_udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.broadcaster_udp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.broadcaster_udp.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        self.broadcaster_udp.settimeout(4)
+        self.broadcaster_udp.settimeout(5)
 
         self.node_uuid = get_node_uuid()
 
@@ -91,8 +94,6 @@ class TransMsg:
         self.client_tcp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.client_tcp.bind(('', get_broadcast_port()))
 
-        # set IP addr
-        self.local_ip = socket.gethostbyname(socket.gethostname())
 
     def add_neighbor(self, neighbor_info_instance):
         if self.check_is_repeat_neighbor(neighbor_info_instance):
@@ -107,11 +108,12 @@ class TransMsg:
             print_green('Success add neighbor! Now I have '+str(len(self.neighbor_info))+' neighbors (acc: ' + str(len(self.acc_neighbor_info)) + ' and con: ' + str(len(self.con_neighbor_info)) + ').')
             # self.print_neighbors()
 
-    def find_neighbor_port_via_uuid(self, uuid):
+    def find_neighbor_ip_and_port_via_uuid(self, uuid):
         for neighbor in self.neighbor_info:
             if neighbor.uuid == uuid:
-                return neighbor.tcp_port
+                return neighbor.ip, neighbor.tcp_port
         return None
+
 
     def check_is_repeat_neighbor(self, neighbor_info_instance):
         unchecked_uuid = neighbor_info_instance.uuid
@@ -126,10 +128,10 @@ class TransMsg:
                 return index
         return None
 
-    def find_neighbor_port_via_addr(self, addr):
+    def find_neighbor_ip_and_port_via_addr(self, addr):
         for neighbor in self.neighbor_info:
             if neighbor.addr == addr:
-                return neighbor.tcp_port
+                return neighbor.ip, neighbor.tcp_port
         return None
 
     def find_neighbor_pk_via_uuid(self, uuid):
@@ -155,11 +157,11 @@ class TransMsg:
         compressed_msg = gzip.compress(encode_msg)  # zip msg
 
         # encode_msg_size = sys.getsizeof(all_msg)
-        print_blue("The size of broadcast " + msg_type + " msg is " + str(sys.getsizeof(compressed_msg)) + " bytes.")
+        # print_blue("The size of broadcast " + msg_type + " msg is " + str(sys.getsizeof(compressed_msg)) + " bytes.")
         # msg_size = sys.getsizeof(msg)
 
         self.broadcaster_udp.sendto(compressed_msg, ('255.255.255.255', get_broadcast_port()))
-        # print_green("broadcast *" + msg_type + "* msg, size = " + str(compressed_encode_msg_size) + " Bytes.")
+        print_blue("broadcast *" + msg_type + "* msg, size = " + str(sys.getsizeof(compressed_msg)) + " bytes.")
         pass
 
 
@@ -202,7 +204,7 @@ class TransMsg:
 
     def tcp_receive(self, my_chain=None, acc_node=None):
         while True:
-            conn, addr = self.server_tcp.accept()
+            conn, (sender_ip, sender_port) = self.server_tcp.accept()
             decompressed_data = gzip.decompress(conn.recv(10240))
             # decode decompress recv msg
             prefix = " MSG: "
@@ -226,7 +228,7 @@ class TransMsg:
             if msg_type == "MTreeProof":
                 self.tcp_MTree_proof_process(pure_msg, acc_node)
             if msg_type == "VPBPair":
-                self.tcp_VPBPair_process(pure_msg, acc_node, my_chain, uuid, port)
+                self.tcp_VPBPair_process(pure_msg, acc_node, my_chain, uuid, other_ip=sender_ip, other_port=sender_port)
             if msg_type == "TxnTestResult":
                 self.tcp_txn_test_result_process(pure_msg, acc_node)
 
@@ -246,10 +248,10 @@ class TransMsg:
         new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
         self.add_neighbor(new_neighbor)"""
 
-        (uuid, port, addr, node_type, pk) = self.decode_hello_msg(pure_msg)
+        (uuid, port, addr, node_type, pk, other_ip) = self.decode_hello_msg(pure_msg)
         # print_blue("Recv Hello msg, add new neighbor...")
         # process logic of recv hello msg:
-        new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type, pk=pk)
+        new_neighbor = NeighborInfo(ip= other_ip, tcp_port=port, uuid=uuid, addr=addr, node_type=node_type, pk=pk)
         self.add_neighbor(new_neighbor)
 
     def tcp_MTree_proof_process(self, pure_msg, acc_node):
@@ -266,16 +268,16 @@ class TransMsg:
         # send VPB pairs to recipient
         recipient_addr, need_send_vpb_index = acc_node.account.send_VPB_pairs_dst()
         for index, item in enumerate(recipient_addr):
-            recipient_port = self.find_neighbor_port_via_addr(item)
+            recipient_ip, recipient_port = self.find_neighbor_ip_and_port_via_addr(item)
             need_send_vpb = []
             for i in need_send_vpb_index[index]:
                 need_send_vpb.append(acc_node.account.ValuePrfBlockPair[i])
-            self.tcp_send(other_tcp_port=recipient_port, data_to_send=need_send_vpb, msg_type="VPBPair")
+            self.tcp_send(other_tcp_port=recipient_port, data_to_send=need_send_vpb, msg_type="VPBPair", other_ip=recipient_ip)
 
         # start send new package to txn pool
         acc_node.send_package_flag += 0.4
 
-    def tcp_VPBPair_process(self, pure_msg, acc_node, my_chain, uuid, port):
+    def tcp_VPBPair_process(self, pure_msg, acc_node, my_chain, uuid, other_ip, other_port):
         while True:
             if acc_node.this_round_block_index == None or acc_node.this_round_block_index > my_chain.get_latest_block_index():
                 print("Wait 0.5 sec for new block adding...")
@@ -290,10 +292,10 @@ class TransMsg:
                 test_flag = False
         if test_flag:
             print_green("Accept this value from " + str(uuid))
-            self.tcp_send(other_tcp_port=port, data_to_send="txn success!", msg_type="TxnTestResult")
+            self.tcp_send(other_tcp_port=other_port, data_to_send="txn success!", msg_type="TxnTestResult", other_ip=other_ip)
         else:
             print_red("VPB test fail! reject this value from " + str(uuid))
-            self.tcp_send(other_tcp_port=port, data_to_send="txn fail!", msg_type="TxnTestResult")
+            self.tcp_send(other_tcp_port=other_port, data_to_send="txn fail!", msg_type="TxnTestResult", other_ip=other_ip)
 
     def tcp_txn_test_result_process(self, pure_msg, acc_node):
         if pure_msg == 'txn success!':
@@ -305,7 +307,7 @@ class TransMsg:
             # start send new package to txn pool
             acc_node.send_package_flag += 0.1
 
-    def tcp_send(self, other_tcp_port, data_to_send, msg_type, other_ip="127.0.0.1"): # local test, thus other_ip="127.0.0.1"
+    def tcp_send(self, other_tcp_port, data_to_send, msg_type, other_ip):
         """
         Open a connection to the other_ip, other_tcp_port
         and do the steps to exchange timestamps.
@@ -319,7 +321,12 @@ class TransMsg:
         compressed_msg = gzip.compress(encode_msg)  # zip msg
 
         SENDER = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        SENDER.connect((other_ip, int(other_tcp_port)))
+        try:
+            SENDER.connect((other_ip, int(other_tcp_port)))
+        except Exception as e:
+            raise RuntimeError("An error occurred in SENDER.connect " + str(other_ip) +
+                               ": " + str(other_tcp_port) + str(e))
+
         # address = (other_ip, int(other_tcp_port))
         # pickled_data = pickle.dumps(data_to_send)
         # print the size of compressed msg
@@ -336,7 +343,8 @@ class TransMsg:
         addr = decoded_msg[5]
         node_type = decoded_msg[7]
         pk = bytes.fromhex(decoded_msg[9])
-        return uuid, port, addr, node_type, pk
+        ip = decoded_msg[11]
+        return uuid, port, addr, node_type, pk, ip
 
     def listen_brd(self, my_addr, my_type, my_local_chain, my_pk, con_node, acc_node):
         while True:
@@ -364,7 +372,7 @@ class TransMsg:
                 # enter diff process func
                 if msg_type == 'Hello':
                     hello_msg_process = daemon_thread_builder(
-                        self.hello_msg_process, args=(my_addr, my_type, my_pk, pure_msg, ))
+                        self.hello_msg_process, args=(my_addr, my_type, my_pk, pure_msg))
                     hello_msg_process.start()
                     hello_msg_process.join()
                 elif msg_type == 'Block':
@@ -389,10 +397,10 @@ class TransMsg:
                     pass
 
     def hello_msg_process(self, my_addr, my_type, my_pk, pure_msg):
-        (uuid, port, addr, node_type, pk) = self.decode_hello_msg(pure_msg)
+        (uuid, port, addr, node_type, pk, other_ip) = self.decode_hello_msg(pure_msg)
         # print_blue("Recv Hello msg, add new neighbor...")
         # process logic of recv hello msg:
-        new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type, pk=pk)
+        new_neighbor = NeighborInfo(ip=other_ip, tcp_port=port, uuid=uuid, addr=addr, node_type=node_type, pk=pk)
         self.add_neighbor(new_neighbor)
         # create self info for new neighbor
         my_uuid = "uuid: " + str(self.node_uuid)
@@ -400,12 +408,13 @@ class TransMsg:
         my_addr_2 = "addr: " + str(my_addr)
         my_type_2 = "node_type: " + my_type
         my_pk_2 = "pk: " + my_pk.hex()
-        hello_msg = my_uuid + " " + my_port + " " + my_addr_2 + " " + my_type_2 + " " + my_pk_2
+        my_ip_addr = "ip: " + str(self.local_ip)
+        hello_msg = my_uuid + " " + my_port + " " + my_addr_2 + " " + my_type_2 + " " + my_pk_2 + " " + my_ip_addr
         """msg_prefix = "node_uuid: " + str(self.node_uuid) + " ON " + str(self.self_port) + " Hello MSG: "
         new_msg_info = msg_prefix + hello_msg"""
         # send self info to new neighbor
         # print_blue("send tcp msg to " + port + " from " + my_port + ": " + str(new_msg_info))
-        self.tcp_send(other_tcp_port=port, data_to_send=hello_msg, msg_type="Hello")
+        self.tcp_send(other_tcp_port=port, data_to_send=hello_msg, msg_type="Hello", other_ip=other_ip)
 
     def block_msg_process(self, my_local_chain, my_type, uuid, pure_msg, con_node, acc_node):
         block = pure_msg
@@ -465,7 +474,8 @@ class TransMsg:
         addr_2 = "addr: " + str(addr)
         node_type_2 = "node_type: " + node_type
         pk_2 = "pk: " + pk.hex()
-        hello_msg = uuid + " " + port + " " + addr_2 + " " + node_type_2 + " " + pk_2
+        ip_addr = "ip: " + str(self.local_ip)
+        hello_msg = uuid + " " + port + " " + addr_2 + " " + node_type_2 + " " + pk_2 + " " + ip_addr
         self.broadcast(msg=hello_msg, msg_type='Hello')
 
     def brd_block_to_neighbors(self, block):
@@ -484,5 +494,13 @@ class TransMsg:
             print(f"UUID: {value.uuid}")
             print(f"Address: {value.addr}")
             print(f"Node Type: {value.node_type}")
+            print("-----------------")
+        print("=" * 25)
+
+    def print_brief_acc_neighbors(self):
+        print("=" * 25)
+        for index, value in enumerate(self.acc_neighbor_info, start=0):
+            print(f"Neighbor {index} Info:")
+            print(f"IP: {value.ip}: {value.tcp_port}")
             print("-----------------")
         print("=" * 25)

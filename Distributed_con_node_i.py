@@ -104,11 +104,11 @@ class DstConNode:
                     mTree = new_block_body.info
                     block_index = new_block.index
                     for index, acc_neighbor_uuid in enumerate(self.txns_pool.sender_id, start=0):
-                        acc_port = self.trans_msg.find_neighbor_port_via_uuid(acc_neighbor_uuid)
+                        acc_ip, acc_port = self.trans_msg.find_neighbor_ip_and_port_via_uuid(acc_neighbor_uuid)
                         if acc_port == None:
                             raise ValueError('Not find valid acc port!')
                         new_msg = (mTree.prfList[index], block_index)
-                        self.trans_msg.tcp_send(other_tcp_port=acc_port, data_to_send=new_msg, msg_type="MTreeProof")
+                        self.trans_msg.tcp_send(other_tcp_port=acc_port, data_to_send=new_msg, msg_type="MTreeProof",other_ip=acc_ip)
                     break # return this round mine
             if mine_success:
                 print('Mine success and brd new block to neighbors!')

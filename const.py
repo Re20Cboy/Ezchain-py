@@ -13,17 +13,17 @@ ACC_ACC_DELAY = 1.5
 
 # Number of simulated nodes
 NODE_NUM = 5
-DST_NODE_NUM = 3
+DST_NODE_NUM = 2
 
 # Number of simulated accounts
 ACCOUNT_NUM = 5
-DST_ACC_NUM = 3
+DST_ACC_NUM = 2
 
 # Number of max packages in con node's txns pool
-MAX_PACKAGES = 3
+MAX_PACKAGES = 2
 
 # parm for dst mine
-ONE_HASH_TIME = 0.5
+ONE_HASH_TIME = 0.3
 ONE_HASH_SUCCESS_RATE = 0.005
 
 # Number of transactions to package at once, theoretically should not exceed ACCOUNT_NUM^2 / 2

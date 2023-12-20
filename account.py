@@ -151,6 +151,110 @@ class Account:
         with open(publicPath, "wb") as f:
             f.write(self.publicKey)
 
+    def generate_txn_dst(self, addr_lst, amount_lst):
+        def pick_values_and_generate_txns(V, tmpSender, tmpRecipient, tmpNonce, tmpTxnHash, tmpTime):
+            # V is an integer, the total amount of value to pick
+            if V < 1:
+                raise ValueError("The value of V cannot be less than 1")
+            tmpCost = 0  # Dynamically record how much value is to be consumed
+            costList = []  # Record the index of the consumed Value
+            changeValueIndex = -1  # Record the index of the change value
+            txn_2_sender = None
+            txn_2_recipient = None
+            value_Enough = False
+            for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
+                value = VPBpair[0]
+                if value in [i[0] for i in self.costedValuesAndRecipes]:
+                    continue
+                tmpCost += value.valueNum
+                if tmpCost >= V:  # The demand for value is met, spend up to this value
+                    changeValueIndex = i
+                    costList.append(i)
+                    value_Enough = True
+                    break
+                changeValueIndex = i
+                costList.append(i)
+
+            # Check if the balance is sufficient
+            if not value_Enough:
+                raise ValueError("Insufficient balance!")
+
+            change = tmpCost - V  # Calculate the change
+
+            if change > 0:  # Change needed, split the value
+                V1, V2 = self.ValuePrfBlockPair[changeValueIndex][0].split_value(change)  # V2 is the change
+                # Create a transaction for change
+                txn_2_sender = transaction.Transaction(sender=tmpSender, recipient=tmpSender,
+                                                       nonce=tmpNonce, signature=None, value=[V2],
+                                                       tx_hash=tmpTxnHash, time=tmpTime)
+                txn_2_sender.sig_txn(self.privateKey)
+                txn_2_recipient = transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                                                          nonce=tmpNonce, signature=None, value=[V1],
+                                                          tx_hash=tmpTxnHash, time=tmpTime)
+                txn_2_recipient.sig_txn(self.privateKey)
+                self.costedValuesAndRecipes.append((V1, tmpRecipient))
+            else:
+                changeValueIndex = -1
+            return costList, changeValueIndex, txn_2_sender, txn_2_recipient
+
+        # todo: Rewrite the change logic to maximize the use of change
+        accTxns = []
+        tmpBalance = self.balance
+
+        for index, addr in enumerate(addr_lst, start=0):
+            tmpTime = str(datetime.datetime.now())
+            tmpTxnHash = '0x19f1df2c7ee6b464720ad28e903aeda1a5ad8780afc22f0b960827bd4fcf656d'  # todo: Transaction hash is temporarily fixed, to be implemented
+            tmpSender = self.addr
+            tmpRecipient = addr
+            tmpNonce = 0  # To be completed
+            # tmpSig = unit.generate_signature(tmpSender)
+            tmpV = amount_lst[index]
+            if tmpBalance <= tmpV:  # Can only transact if the balance is more than 0!
+                raise ValueError("Insufficient balance!!!")
+            else:
+                tmpBalance -= tmpV
+
+            # costList is a list of indexes of the values spent (including change value), changeValueIndex is the index of the unique change value (already included in costList)
+            costList, changeValueIndex, changeTxn2Sender, changeTxn2Recipient = pick_values_and_generate_txns(tmpV, tmpSender, tmpRecipient, tmpNonce, tmpTxnHash, tmpTime)  # Values spent and change
+            if changeValueIndex < 0:  # No change needed
+                tmpValues = []
+                for index in costList:
+                    tmpValues.append(self.ValuePrfBlockPair[index][0])
+                    self.costedValuesAndRecipes.append((self.ValuePrfBlockPair[index][0], tmpRecipient))
+                    # Delete this value
+                    # self.delete_VPBpair(i)
+                tmpTxn = transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                                                 nonce=tmpNonce, signature=None, value=tmpValues,
+                                                 tx_hash=tmpTxnHash, time=tmpTime)
+                tmpTxn.sig_txn(load_private_key=self.privateKey)
+                accTxns.append(tmpTxn)
+            else:  # Change needed
+                tmpValues = []
+                for i in costList:
+                    if i != changeValueIndex:  # Means i is spent and is not the only change value
+                        tmpValues.append(self.ValuePrfBlockPair[i][0])
+                        self.costedValuesAndRecipes.append((self.ValuePrfBlockPair[i][0], tmpRecipient))
+
+                if tmpValues != []:  # Non-change values that are spent
+                    tmpTxn = transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
+                                                     nonce=tmpNonce, signature=None, value=tmpValues,
+                                                     tx_hash=tmpTxnHash, time=tmpTime)
+                    tmpTxn.sig_txn(load_private_key=self.privateKey)
+                    accTxns.append(tmpTxn)
+
+                tmpP = self.ValuePrfBlockPair[changeValueIndex][1]
+                tmpB = self.ValuePrfBlockPair[changeValueIndex][2]
+                self.delete_VPBpair(changeValueIndex)
+                self.add_VPBpair([changeTxn2Recipient.Value[0], copy.deepcopy(tmpP), copy.deepcopy(tmpB)])  # V1 cannot be used in subsequent transactions in this round
+                self.add_VPBpair([changeTxn2Sender.Value[0], copy.deepcopy(tmpP), copy.deepcopy(tmpB)])
+
+                accTxns.append(changeTxn2Sender)
+                accTxns.append(changeTxn2Recipient)
+
+        self.accTxns = accTxns
+        self.acc2nodeDelay.append(asizeof.asizeof(accTxns) * 8 / BANDWIDTH + NODE_ACCOUNT_DELAY)
+        return accTxns
+
     def random_generate_txns(self, randomRecipients):
         def pick_values_and_generate_txns(V, tmpSender, tmpRecipient, tmpNonce, tmpTxnHash, tmpTime): 
             # V is an integer, the total amount of value to pick
@@ -254,7 +358,6 @@ class Account:
         self.accTxns = accTxns
         self.acc2nodeDelay.append(asizeof.asizeof(accTxns) * 8 / BANDWIDTH + NODE_ACCOUNT_DELAY)
         return accTxns
-
 
     def optimized_generate_txns(self, randomRecipients):
         def pick_values_and_generate_txns(V, tmpSender, tmpRecipient, tmpNonce, tmpTxnHash, tmpTime): 

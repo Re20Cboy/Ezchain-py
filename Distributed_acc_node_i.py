@@ -48,6 +48,36 @@ class DstAcc:
         self.this_round_block_index = None
         self.account.clear_and_fresh_info_dst()
 
+    def generate_acc_txns_package(self):
+        self.trans_msg.print_brief_acc_neighbors()
+        # Read the transaction information entered by the user
+        neighbor_addr_lst = []
+        transfer_amount_lst = []
+        while True:
+            neighbor_number = input("Enter transfer account (number): ")
+            if neighbor_number == "N":
+                print("Quit.")
+                return
+            neighbor_number = int(neighbor_number)
+            while neighbor_number < 0 or neighbor_number >= len(self.trans_msg.acc_neighbor_info):
+                print("Illegal neighbor number!")
+                neighbor_number = int(input("Enter transfer account (number): "))
+            transfer_amount = int(input("Enter transfer amount: "))
+            while transfer_amount <= 0 or transfer_amount > self.account.balance:
+                print("Illegal neighbor amount!")
+                transfer_amount = int(input("Enter transfer amount: "))
+            neighbor_addr_lst.append(self.trans_msg.acc_neighbor_info[neighbor_number].addr)
+            transfer_amount_lst.append(transfer_amount)
+            continue_transfer = input("Continue with the transfer? (Enter 'Y' to continue, end with other characters)")
+            if continue_transfer.upper() != 'Y':
+                break
+        acc_txns = self.account.generate_txn_dst(addr_lst=neighbor_addr_lst, amount_lst=transfer_amount_lst)
+        tmp_acc_txns_package = transaction.AccountTxns(self.account.addr, self.global_id, acc_txns)
+        tmp_acc_txns_package.sig_accTxn(self.account.privateKey)
+        acc_txns_package = copy.deepcopy(
+            (tmp_acc_txns_package.Digest, tmp_acc_txns_package.Signature, self.account.addr, self.global_id))
+        return acc_txns, acc_txns_package  # send to txn pool
+
     def random_generate_acc_txns_package(self):
         def select_k_numbers(n, k): # select k numbers from (0,1,2,3,...,n-1)
             if k > n:
