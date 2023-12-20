@@ -112,7 +112,7 @@ class TransMsg:
         for neighbor in self.neighbor_info:
             if neighbor.uuid == uuid:
                 return neighbor.ip, neighbor.tcp_port
-        return None
+        return None, None
 
 
     def check_is_repeat_neighbor(self, neighbor_info_instance):
@@ -132,7 +132,7 @@ class TransMsg:
         for neighbor in self.neighbor_info:
             if neighbor.addr == addr:
                 return neighbor.ip, neighbor.tcp_port
-        return None
+        return None, None
 
     def find_neighbor_pk_via_uuid(self, uuid):
         for neighbor in self.neighbor_info:
@@ -163,7 +163,6 @@ class TransMsg:
         self.broadcaster_udp.sendto(compressed_msg, ('255.255.255.255', get_broadcast_port()))
         print_blue("broadcast *" + msg_type + "* msg, size = " + str(sys.getsizeof(compressed_msg)) + " bytes.")
         pass
-
 
     def brd_receive(self): # msg_type is str
         while True:
@@ -204,7 +203,7 @@ class TransMsg:
 
     def tcp_receive(self, my_chain=None, acc_node=None):
         while True:
-            conn, (sender_ip, sender_port) = self.server_tcp.accept()
+            conn, (sender_client_ip, sender_client_port) = self.server_tcp.accept()
             decompressed_data = gzip.decompress(conn.recv(10240))
             # decode decompress recv msg
             prefix = " MSG: "
@@ -219,6 +218,8 @@ class TransMsg:
             port = parsed_msg[3]
             msg_type = parsed_msg[5]
 
+            sender_server_ip, sender_server_port = self.find_neighbor_ip_and_port_via_uuid(uuid)
+
             # received_data = pickle.loads(conn.recv(4096))  # 这里的4096表示接收消息的最大字节数
             # print_blue("Received TCP data: " + received_data)
             # msg_type = self.get_msg_type(received_data)
@@ -228,7 +229,9 @@ class TransMsg:
             if msg_type == "MTreeProof":
                 self.tcp_MTree_proof_process(pure_msg, acc_node)
             if msg_type == "VPBPair":
-                self.tcp_VPBPair_process(pure_msg, acc_node, my_chain, uuid, other_ip=sender_ip, other_port=sender_port)
+                if sender_server_ip == None or sender_server_port == None:
+                    raise ValueError('sender server ip and port NOT FIND!')
+                self.tcp_VPBPair_process(pure_msg, acc_node, my_chain, uuid, other_ip=sender_server_ip, other_port=sender_server_port)
             if msg_type == "TxnTestResult":
                 self.tcp_txn_test_result_process(pure_msg, acc_node)
 
@@ -460,6 +463,9 @@ class TransMsg:
         if not con_node.txns_pool.check_is_repeated_package(pure_msg):
             # add acc_txns_package to self txn pool
             con_node.txns_pool.add_acc_txns_package(pure_msg, uuid)
+        else:
+            print_yellow('Recv repeated package from ' + str(uuid))
+            pass
 
     def decode_acc_txns_package_msg(self, acc_txns_package_msg):
         pass

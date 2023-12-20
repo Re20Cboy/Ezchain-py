@@ -22,8 +22,8 @@ class txnsPool:
     def check_is_repeated_package(self, acc_txns_package):
         if self.pool == []:
             return False
-        for item in self.pool:
-            if item == acc_txns_package:
+        for item in self.pool: # acc_txns_package=(digest, sig, addr, global_id)
+            if item[2] == acc_txns_package[2]: # item[2] = addr
                 return True
         return False
 

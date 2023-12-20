@@ -30,6 +30,8 @@ This project provides two ways of initialization. The first method is designed t
 ### Running simulation (NON-DST)
 
 #### Environment setup
+<<<<<<< HEAD
+=======
 
 Python 3.8 or higher.
 
@@ -66,6 +68,57 @@ or
 
 ```
 ./Ezchain_simulate.py
+```
+
+### Running simulation (DST)
+
+#### Environment setup
+>>>>>>> ee0696e089a61b11e695b630a6c01e2a534f31c3
+
+Python 3.8 or higher.
+
+```
+git clone https://github.com/Re20Cboy/Ezchain-py.git
+
+cd Ezchain
+
+pip install -r requirements.txt
+```
+
+#### Useful configuration options
+
+These are some critical configuration options in the project, which can be modified in the `const.py` file.
+
+<<<<<<< HEAD
+* SAMPLE_NEIGHBORS_NUM controls the neighbors' number of each p2p node (include consensus and account).
+* NODE_ACCOUNT_DELAY and ACC_ACC_DELAY control the delay of consensus node to account node and the delay of account node to account node (referring here to queuing delays, excluding transmission times).
+* NODE_NUM controls number of consensus nodes in NON-DST mode.
+* ACCOUNT_NUM controls number of account nodes in NON-DST mode.
+* PICK_TXNS_NUM controls the upper limit of transactions packaged at one round (block), it should theoretically not exceed ACCOUNT_NUM^2/2.
+* SIMULATE_ROUND controls the mining round.
+* BANDWIDTH controls the network's bandwidth.
+* HASH_DIFFICULTY controls the mining difficulty, i.e., the probability of successful mining in one hash computation.
+* HASH_POWER controls the hash computing power, indicating the number of hashes computation performed per second.
+* GENESIS_SENDER and GENESIS_MINER_ID represent genesis sender's address and genesis miner's ID.
+=======
+* DST_NODE_NUM controls number of consensus nodes in DST mode.
+* DST_ACC_NUM controls number of account nodes in DST mode.
+* MAX_PACKAGES signifies the threshold at which collective packaging into blocks occurs, when the transaction pool of consensus nodes reaches MAX_PACKAGES acctxns packages.
+* ONE_HASH_TIME controls the time consumed by one hash calculation.
+* ONE_HASH_SUCCESS_RATE controls the probability of a successful hash calculation, i.e., mining difficulty.
+* The remaining parameters are as described in the NON-DST mode.
+>>>>>>> ee0696e089a61b11e695b630a6c01e2a534f31c3
+
+#### Run
+
+```
+python3 DST_ENTRY_POINT.py
+```
+
+or
+
+```
+./DST_ENTRY_POINT.py
 ```
 
 ### Running simulation (DST)

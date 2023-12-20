@@ -1,3 +1,5 @@
+# Control random generate txns or not
+RANDOM_TXNS = True
 
 # Total number of transactions in the CSV file
 TNX_CSV_NUM = 300
@@ -18,14 +20,14 @@ DST_NODE_NUM = 2
 # Number of simulated accounts
 ACCOUNT_NUM = 5
 
-DST_ACC_NUM = 3
+DST_ACC_NUM = 2
 
 # Number of max packages in con node's txns pool
 MAX_PACKAGES = 2
 
 # parm for dst mine
-ONE_HASH_TIME = 0.3
-ONE_HASH_SUCCESS_RATE = 0.005
+ONE_HASH_TIME = 0.5
+ONE_HASH_SUCCESS_RATE = 0.01
 
 # Number of transactions to package at once, theoretically should not exceed ACCOUNT_NUM^2 / 2
 # (/2 because at least ACCOUNT_NUM/2 accounts participate in transactions randomly)
