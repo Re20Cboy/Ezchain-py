@@ -85,6 +85,12 @@ class Block:
                 return self.index
         return False
 
+    def is_valid_next_block_dst(self, block):
+        if self.index + 1 == block.index:
+            if self.get_hash() == block.get_pre_hash():
+                return True
+        return False
+
     def print_block(self):
       print('//////// BLOCK ////////\n')
       print(self.block_to_str())
@@ -126,5 +132,3 @@ class Block:
     def is_in_bloom(self, item):
         """Check if an item is in the block's Bloom filter."""
         return item in self.bloom
-
-

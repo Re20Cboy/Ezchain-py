@@ -8,6 +8,7 @@ import json
 import pickle
 from Distributed_acc_node_i import DstAcc
 import unit
+import blockchain
 
 class TestBloomFilter(unittest.TestCase):
     def setUp(self):
@@ -106,6 +107,53 @@ class test_dst_acc(unittest.TestCase):
         uuid = [5, 2, 9, 3, 7]
         positions = unit.sort_and_get_positions(uuid)
         print(positions) # [2, 0, 4, 1, 3] means that 5 in 2-th position, 2 in 0-th position, 9 in 4-th position, ...
+
+class TestForkBlockchain(unittest.TestCase):
+    def setUp(self):
+        EZs = EZsimulate()
+        # generate genesis block
+        genesis_block = EZs.generate_GenesisBlock()
+        self.fork_bc = blockchain.Blockchain(dst=True)
+        # add genesis block
+        self.fork_bc.add_block(genesis_block)
+
+    def test_add_main_chain_block(self, add_round=5): # add block belong to main (longest) chain
+        for i in range(add_round):
+            new_index = self.fork_bc.get_latest_block_index() + 1
+            new_pre_hash = self.fork_bc.get_latest_block().get_hash()
+            # random generate a new block belong to main chain
+            new_block = Block(index=new_index, m_tree_root='test_merkel_tree_root', miner='test_miner',
+                              pre_hash=new_pre_hash)
+            self.fork_bc.add_block(new_block)
+        self.fork_bc.print_real_chain_dst(fork_block=self.fork_bc.real_chain)
+
+    def test_longest_chain_is_vaild(self):
+        if self.fork_bc.is_valid():
+            print('longest chain is vaild.')
+        else:
+            print('longest chain is NOT vaild.')
+
+    def test_add_fork_block(self, main_block_num=5, fork_num=2, block_num_in_one_fork=2):
+        # init main chain
+        for i in range(main_block_num):
+            new_index = self.fork_bc.get_latest_block_index() + 1
+            new_pre_hash = self.fork_bc.get_latest_block().get_hash()
+            # random generate a new block belong to main chain
+            new_block = Block(index=new_index, m_tree_root='test_merkel_tree_root', miner='test_miner',
+                              pre_hash=new_pre_hash)
+            self.fork_bc.add_block(new_block)
+        # add fork block to main chain
+        for i in range(fork_num):
+            entry_block = self.fork_bc.chain[i]
+            for j in range(block_num_in_one_fork):
+                new_index = self.fork_bc.chain[i].get_index() + 1 + j
+                new_pre_hash = entry_block.get_hash()
+                new_block = Block(index=new_index, m_tree_root='test_merkel_tree_root', miner='test_miner',
+                                  pre_hash=new_pre_hash)
+                entry_block = new_block
+                self.fork_bc.add_block(new_block)
+        # print fork chain
+        self.fork_bc.print_real_chain_dst(fork_block=self.fork_bc.real_chain)
 
 if __name__ == '__main__':
     unittest.main()
