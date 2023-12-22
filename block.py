@@ -79,6 +79,12 @@ class Block:
     def block_to_pickle(self):
         return pickle.dumps(self)
 
+    def is_valid_next_block(self, block):
+        if self.index + 1 == block.index:
+            if self.get_hash() == block.get_pre_hash():
+                return self.index
+        return False
+
     def print_block(self):
       print('//////// BLOCK ////////\n')
       print(self.block_to_str())

@@ -1,6 +1,9 @@
 # Control random generate txns or not
 RANDOM_TXNS = True
 
+# Max fork height
+MAX_FORK_HEIGHT = 6
+
 # Total number of transactions in the CSV file
 TNX_CSV_NUM = 300
 

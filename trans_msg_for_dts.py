@@ -7,6 +7,13 @@ import sys
 import gzip
 import threading
 
+from block import Block
+import bloom
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
+import hashlib
+
 ANSI_RESET = "\u001B[0m"
 ANSI_RED = "\u001B[31m"
 ANSI_GREEN = "\u001B[32m"
@@ -137,6 +144,12 @@ class TransMsg:
     def find_neighbor_pk_via_uuid(self, uuid):
         for neighbor in self.neighbor_info:
             if neighbor.uuid == uuid:
+                return neighbor.pk
+        return None
+
+    def find_neighbor_pk_via_addr(self, addr):
+        for neighbor in self.neighbor_info:
+            if neighbor.addr == addr:
                 return neighbor.pk
         return None
 
@@ -419,45 +432,123 @@ class TransMsg:
         # print_blue("send tcp msg to " + port + " from " + my_port + ": " + str(new_msg_info))
         self.tcp_send(other_tcp_port=port, data_to_send=hello_msg, msg_type="Hello", other_ip=other_ip)
 
-    def block_msg_process(self, my_local_chain, my_type, uuid, pure_msg, con_node, acc_node):
-        block = pure_msg
-        # print_blue("Recv Block msg, add new block...")
-        miner_pk = self.find_neighbor_pk_via_uuid(uuid)
-        if miner_pk == None:
-            print('No miner pk find!')
-            return
+    def check_block_with_block_body(self, block, m_tree, acc_digests, acc_sigs, acc_addrs, acc_node=None):
+        # check unit tool
+        def has_duplicate(input_list):
+            seen = set()
+            for item in input_list:
+                if item in seen:
+                    return True
+                seen.add(item)
+            return False
+        def hash(val):
+            if type(val) == str:
+                return hashlib.sha256(val.encode("utf-8")).hexdigest()
+            else:
+                return hashlib.sha256(val).hexdigest()
+        # ver block via block body info
+        # 0. init check info
+        check_bloom = bloom.BloomFilter()
+        # 1. check merkel tree
+        if not m_tree.checkTree():
+            return False
+        # 2. check merkel tree root in the block
+        if block.get_m_tree_root() != m_tree.getRootHash():
+            return False
+        # 3. check the acc_sigs with acc_addrs
+        if len(acc_sigs) != len(acc_addrs) or len(acc_sigs) != len(acc_digests) or len(acc_sigs) != len(m_tree.leaves):
+            return False
+        if has_duplicate(acc_addrs):
+            return False
+        # 4. check sigs' legality
+        for index, acc_sig in enumerate(acc_sigs):
+            acc_addr = acc_addrs[index]
+            check_bloom.add(acc_addr)
+            acc_digest = acc_digests[index].encode('utf-8')
+            if acc_node != None: # acc node
+                if acc_addr == acc_node.account.addr: # this sig is sigged by self, pass check
+                    continue
+            load_acc_pk = self.find_neighbor_pk_via_addr(acc_addr)
+            if load_acc_pk == None:
+                raise ValueError('Not find neighbor with addr: '+str(acc_addr))
+            # check sig
+            public_key = load_pem_public_key(load_acc_pk)
+            signature_algorithm = ec.ECDSA(hashes.SHA256())
+            try:
+                public_key.verify(
+                    acc_sig,
+                    acc_digest,
+                    signature_algorithm
+                )
+            except:
+                return False
+        # 5. check block's bloom
+        if block.get_bloom().bit_array != check_bloom.bit_array:
+            return False
+        # 6. check digest and merkel tree's leaves
+        for index, leaf in enumerate(m_tree.leaves):
+            if leaf.value != hash(acc_digests[index]):
+                return False
+        # all check pass
+        return True
 
-        if block.index == 0: # is genesis block
+    def block_msg_process(self, my_local_chain, my_type, uuid, pure_msg, con_node, acc_node):
+        if type(pure_msg) == Block: # genesis block
+            if pure_msg.index != 0:
+                print_yellow('block without body, ignore!')
+                return
+            block = pure_msg
             if len(my_local_chain.chain) == 0: # local chain is empty
                 my_local_chain.add_block(block)
                 print_green("Success add this GENESIS block: "+block.block_to_short_str()+", now my chain's len = " + str(len(my_local_chain.chain)))
             else:
                 # print_yellow('Ignore this GENESIS block.')
                 pass
-        elif my_local_chain.is_valid_block(block): # valid block, otherwise ignore this block
+        else: # non-genesis block
+            try:
+                (block, m_tree, acc_digests, acc_sigs, acc_addrs) = pure_msg
+            except:
+                print_red('this block msg CANNOT unpack!')
+                return
+            # check block via block body info
+            check_result = self.check_block_with_block_body(block, m_tree, acc_digests, acc_sigs, acc_addrs, acc_node)
+            if not check_result:
+                print_red('block body check NOT pass!')
+                return
 
-            if my_type == "con": # con node
-                if con_node.con_node.check_block_sig(block, block.sig, miner_pk):
-                    con_node.recv_new_block_flag = 1
-                    my_local_chain.add_block(block)
-                    print_green(
-                        "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
-                            len(my_local_chain.chain)))
-                else:
-                    print('block sig illegal!')
+            miner_pk = self.find_neighbor_pk_via_uuid(uuid)
+            if miner_pk == None:
+                print('No miner pk find!')
+                return
 
-            if my_type == "acc": # acc node
-                if acc_node.account.check_block_sig(block, block.sig, miner_pk):
-                    my_local_chain.add_block(block)
-                    print_green(
-                        "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
-                            len(my_local_chain.chain)))
-                    acc_node.send_package_flag += 0.5 # wait for vpb update, send_package_flag can be 1
-                else:
-                    print('block sig illegal!')
+            if my_local_chain.is_valid_block(block): # valid block, otherwise ignore this block
+                if my_type == "con": # con node
+                    if con_node.con_node.check_block_sig(block, block.sig, miner_pk):
+                        con_node.recv_new_block_flag = 1
+                        my_local_chain.add_block(block)
+                        print_green(
+                            "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
+                                len(my_local_chain.chain)))
+                    else:
+                        print('block sig illegal!')
 
-        else:
-            print_red("Ignore this block.")
+                if my_type == "acc": # acc node
+                    if acc_node.account.check_block_sig(block, block.sig, miner_pk):
+                        my_local_chain.add_block(block)
+                        print_green(
+                            "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
+                                len(my_local_chain.chain)))
+                        acc_node.send_package_flag += 0.5 # wait for vpb update, send_package_flag can be 1
+                    else:
+                        print('block sig illegal!')
+
+            else:
+                # todo: process fork
+                print_red("Ignore this block.")
+
+    def block_body_msg_process(self, pure_msg):
+        (block_hash, block_Mtree) = pure_msg
+
 
     def acc_txns_package_msg_process(self, uuid, con_node, pure_msg):
         if not con_node.txns_pool.check_is_repeated_package(pure_msg):

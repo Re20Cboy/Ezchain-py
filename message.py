@@ -21,6 +21,24 @@ class BlockBodyMsg: #即，交易的原始信息(以默克尔树的形式)
         self.info_Txns = Txns #此处的Txns实际上是多余的，此处主要为了便利验证test
         self.size = 0
 
+    def get_acc_sigs(self):
+        acc_sigs = []
+        for acc_package in self.info_Txns:
+            acc_sigs.append(acc_package[1])
+        return acc_sigs
+
+    def get_acc_addrs(self):
+        acc_addrs = []
+        for acc_package in self.info_Txns:
+            acc_addrs.append(acc_package[2])
+        return acc_addrs
+
+    def get_acc_digests(self):
+        acc_digests = []
+        for acc_package in self.info_Txns:
+            acc_digests.append(acc_package[0])
+        return acc_digests
+
     def get_size(self):
         return self.size
 

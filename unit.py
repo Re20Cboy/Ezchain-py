@@ -247,7 +247,7 @@ class MerkleTreeNode:
         self.leafIndex = leafIndex  # 叶子节点的编号，用于跟踪叶子节点，便于制造prfList
         self.father = None  # 用于记录节点的父亲节点
 
-    def hash(val):
+    def hash(val): # val is self
         # return hashlib.sha256(val.encode("utf-8")).hexdigest()
         if type(val) == str:
             return hashlib.sha256(val.encode("utf-8")).hexdigest()

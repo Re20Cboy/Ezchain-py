@@ -28,6 +28,7 @@ class DstConNode:
         self.txns_pool = unit.txnsPool() # for collect acc txns packages
         self.mine_lock = threading.Lock() # lock for func mine
         self.recv_new_block_flag = 0
+        self.fork_blocks = [] # temporarily storing forked blocks
 
     def print_self_info(self):
         print(f"IP: {self.trans_msg.local_ip}")
@@ -97,8 +98,15 @@ class DstConNode:
                     self.con_node.tmpBlockBodyMsg = new_block_body
                     # make new block
                     new_block = self.con_node.create_new_block_for_dst()
-                    # brd new block
-                    self.trans_msg.brd_block_to_neighbors(new_block)
+                    # make new block body for brd
+                    m_tree = new_block_body.info
+                    acc_sigs = new_block_body.get_acc_sigs()
+                    acc_addrs = new_block_body.get_acc_addrs()
+                    acc_digests = new_block_body.get_acc_digests()
+                    new_block_info_4_brd = (new_block, m_tree, acc_digests, acc_sigs, acc_addrs)
+                    # brd new block with test info
+                    self.trans_msg.brd_block_to_neighbors(new_block_info_4_brd)
+
                     mine_success = True
                     # send mTree prf to all acc nodes
                     mTree = new_block_body.info
