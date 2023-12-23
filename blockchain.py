@@ -81,13 +81,13 @@ class Blockchain:
                         self.latest_fork_block = fork_block
 
     def flash_longest_chain(self, entry_fork_block):
-        tmp_pre_block = entry_fork_block.pre_block
-        block_lst_need_to_add = []
+        tmp_pre_block = entry_fork_block.pre_block.block
+        block_lst_need_to_add = [entry_fork_block.block]
         while tmp_pre_block not in self.chain:
-            block_lst_need_to_add.append(tmp_pre_block.block)
-            tmp_pre_block = tmp_pre_block.pre_block
+            block_lst_need_to_add.append(tmp_pre_block)
+            tmp_pre_block = tmp_pre_block.pre_block.block
         # the unchanged latest block's index
-        unchanged_index = tmp_pre_block.block.get_index()
+        unchanged_index = tmp_pre_block.get_index()
         # cut longest chain
         self.chain = self.chain[:unchanged_index+1]
         # add new chain part
@@ -135,7 +135,7 @@ class Blockchain:
             print("---------------------")
 
     def print_real_chain_dst(self, fork_block=None, indent=0): # for DST mode only
-        print('-' * indent + 'Index: ' + str(fork_block.block.get_index()) + ' Block: ' + str(fork_block))
+        print('-' * indent + 'Index: ' + str(fork_block.block.get_index()) + ', Block: ' + str(fork_block))
         if fork_block.next_blocks != []:
             for next_fork_block in fork_block.next_blocks:
                 self.print_real_chain_dst(next_fork_block, indent + 2)

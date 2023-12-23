@@ -4,7 +4,6 @@ from node import Node
 from trans_msg_for_dts import TransMsg
 import threading
 import random
-from Ezchain_simulate import EZsimulate
 import unit
 import transaction
 import copy
@@ -28,7 +27,6 @@ class DstConNode:
         self.txns_pool = unit.txnsPool() # for collect acc txns packages
         self.mine_lock = threading.Lock() # lock for func mine
         self.recv_new_block_flag = 0
-        self.fork_blocks = [] # temporarily storing forked blocks
 
     def print_self_info(self):
         print(f"IP: {self.trans_msg.local_ip}")

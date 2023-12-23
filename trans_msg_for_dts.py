@@ -8,6 +8,7 @@ import gzip
 import threading
 
 from block import Block
+from blockchain import ForkBlock
 import bloom
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
@@ -515,13 +516,37 @@ class TransMsg:
             if not check_result:
                 print_red('block body check NOT pass!')
                 return
-
+            # find miner's pk
             miner_pk = self.find_neighbor_pk_via_uuid(uuid)
             if miner_pk == None:
                 print('No miner pk find!')
                 return
-
-            if my_local_chain.is_valid_block(block): # valid block, otherwise ignore this block
+            # logic of add block
+            if my_type == "con": # con node
+                if con_node.con_node.check_block_sig(block, block.sig, miner_pk):
+                    try:
+                        my_local_chain.add_block(block)
+                    except:
+                        raise ValueError('Add block fail!')
+                    con_node.recv_new_block_flag = 1
+                    print_green(
+                        "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
+                            len(my_local_chain.chain)))
+                else:
+                    print('block sig illegal!')
+            elif my_type == "acc": # acc node
+                if acc_node.account.check_block_sig(block, block.sig, miner_pk):
+                    try:
+                        my_local_chain.add_block(block)
+                    except:
+                        raise ValueError('Add block fail!')
+                    acc_node.send_package_flag += 0.5  # wait for vpb update, send_package_flag can be 1
+                    print_green(
+                        "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
+                            len(my_local_chain.chain)))
+                else:
+                    print('block sig illegal!')
+            """if my_local_chain.is_valid_block(block): # valid block, otherwise ignore this block
                 if my_type == "con": # con node
                     if con_node.con_node.check_block_sig(block, block.sig, miner_pk):
                         con_node.recv_new_block_flag = 1
@@ -540,11 +565,7 @@ class TransMsg:
                                 len(my_local_chain.chain)))
                         acc_node.send_package_flag += 0.5 # wait for vpb update, send_package_flag can be 1
                     else:
-                        print('block sig illegal!')
-
-            else:
-                # todo: process fork
-                print_red("Ignore this block.")
+                        print('block sig illegal!')"""
 
     def block_body_msg_process(self, pure_msg):
         (block_hash, block_Mtree) = pure_msg

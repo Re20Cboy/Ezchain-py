@@ -133,7 +133,7 @@ class TestForkBlockchain(unittest.TestCase):
         else:
             print('longest chain is NOT vaild.')
 
-    def test_add_fork_block(self, main_block_num=5, fork_num=2, block_num_in_one_fork=2):
+    def test_add_fork_block(self, main_block_num=10, fork_num=3, block_num_in_one_fork=3):
         # init main chain
         for i in range(main_block_num):
             new_index = self.fork_bc.get_latest_block_index() + 1
@@ -154,6 +154,9 @@ class TestForkBlockchain(unittest.TestCase):
                 self.fork_bc.add_block(new_block)
         # print fork chain
         self.fork_bc.print_real_chain_dst(fork_block=self.fork_bc.real_chain)
+
+    def test_add_fork_fork_block(self):
+        pass
 
 if __name__ == '__main__':
     unittest.main()
