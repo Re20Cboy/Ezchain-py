@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import unittest
+import socket
+from unittest.mock import patch, MagicMock
 from bloom import BloomFilter, BloomFilterEncoder
 from block import Block
 from Ezchain_simulate import EZsimulate
@@ -9,6 +11,60 @@ import pickle
 from Distributed_acc_node_i import DstAcc
 import unit
 import blockchain
+
+from p2p_network import tcp_dial 
+
+class TestTcpDial(unittest.TestCase):
+    @patch('p2p_network.socket.create_connection')
+    def test_tcp_dial_successful(self, mock_create_connection):
+        # Mock the socket connection
+        mock_conn = MagicMock()
+        mock_create_connection.return_value = mock_conn
+
+        # Test data
+        test_addr = '127.0.0.1'
+        test_context = b'test message'
+
+        # Call the function
+        tcp_dial(test_context, test_addr)
+
+        # Assert connection was created and message was sent
+        mock_create_connection.assert_called_with((test_addr, 80))
+        mock_conn.sendall.assert_called_with(test_context + b'\n')
+
+    @patch('p2p_network.socket.create_connection')
+    def test_tcp_dial_connection_error(self, mock_create_connection):
+        # Simulate a connection error
+        mock_create_connection.side_effect = socket.error("Mocked connection error")
+
+        # Test data
+        test_addr = '127.0.0.1'
+        test_context = b'test message'
+
+        # Call the function and assert it handles the error
+        with self.assertLogs('p2p_network', level='ERROR') as cm:
+            tcp_dial(test_context, test_addr)
+        
+        # Check if appropriate error log is created
+        self.assertIn('Connect error', cm.output[0])
+
+    @patch('p2p_network.socket.create_connection', return_value=MagicMock())
+    def test_tcp_dial_send_error(self, mock_create_connection):
+        # Simulate a send error
+        mock_conn = MagicMock()
+        mock_conn.sendall.side_effect = socket.error("Mocked send error")
+        mock_create_connection.return_value = mock_conn
+
+        # Test data
+        test_addr = '127.0.0.1'
+        test_context = b'test message'
+
+        # Call the function and assert it handles the error
+        with self.assertLogs('p2p_network', level='ERROR') as cm:
+            tcp_dial(test_context, test_addr)
+
+        # Check if appropriate error log is created
+        self.assertIn('Error sending data', cm.output[0])
 
 class TestBloomFilter(unittest.TestCase):
     def setUp(self):
