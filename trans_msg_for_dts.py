@@ -272,13 +272,39 @@ class TransMsg:
         self.add_neighbor(new_neighbor)
 
     def tcp_MTree_proof_process(self, pure_msg, acc_node):
-        # update vpb
-        (mTreePrf, block_index) = pure_msg
-        try:
+        # unit tool
+        def hash(val):
+            if type(val) == str:
+                return hashlib.sha256(val.encode("utf-8")).hexdigest()
+            else:
+                return hashlib.sha256(val).hexdigest()
+        # update vpb (mTreePrf is the mtree proof in VPB, and block_index is the new block's index)
+        (mTreePrf, block_index, block_hash) = pure_msg
+        # acc node should wait for MAX_FORK_HEIGHT blocks for unchanged longest chain
+        # todo: wait for MAX_FORK_HEIGHT blocks to del confirmed VPB pairs, and within [# push block, # confirm block] they are unavailable
+        # find the related values in this acc_txns_package
+        acc_package_hash = mTreePrf[0]
+        # find related corresponding temporary package
+        if acc_node.temp_sent_package != []:
+            related_values = [] # record related values
+            for item in acc_node.temp_sent_package:
+                (acc_txns, acc_txns_package) = item
+                (acc_package_digest, acc_package_sig, acc_addr, acc_global_id) = acc_txns_package
+                if hash(acc_package_digest) == acc_package_hash:
+                    for acc_txn in acc_txns:
+                        related_values += acc_txn.get_values()
+            # record the recv mTree proof and some other info
+            acc_node.temp_recv_mTree_prf.append((mTreePrf, block_index, block_hash, related_values))
+        else:
+            print_yellow('no corresponding temporary package, ignore this MTree proof msg.')
+            pass
+
+        """try:
             acc_node.account.update_VPB_pairs_dst(mTreePrf, block_index)
         except Exception as e:
             raise RuntimeError("An error occurred in acc_node.update_VPB_pairs_dst: " + str(e))
         print_green('Update VPB pair success.')
+
         # updata the block index need to wait.
         acc_node.this_round_block_index = block_index
 
@@ -292,7 +318,7 @@ class TransMsg:
             self.tcp_send(other_tcp_port=recipient_port, data_to_send=need_send_vpb, msg_type="VPBPair", other_ip=recipient_ip)
 
         # start send new package to txn pool
-        acc_node.send_package_flag += 0.4
+        acc_node.send_package_flag += 0.4"""
 
     def tcp_VPBPair_process(self, pure_msg, acc_node, my_chain, uuid, other_ip, other_port):
         while True:
@@ -308,6 +334,9 @@ class TransMsg:
             if not acc_node.account.check_VPBpair(VPBpair=one_vpb, bloomPrf=[], blockchain=my_chain):
                 test_flag = False
         if test_flag:
+            # add new VPB pairs
+            for one_vpb in pure_msg:
+                acc_node.account.add_VPBpair_dst(one_vpb)
             print_green("Accept this value from " + str(uuid))
             self.tcp_send(other_tcp_port=other_port, data_to_send="txn success!", msg_type="TxnTestResult", other_ip=other_ip)
         else:
@@ -506,6 +535,7 @@ class TransMsg:
                 # print_yellow('Ignore this GENESIS block.')
                 pass
         else: # non-genesis block
+            # unpack block msg
             try:
                 (block, m_tree, acc_digests, acc_sigs, acc_addrs) = pure_msg
             except:
@@ -525,10 +555,11 @@ class TransMsg:
             if my_type == "con": # con node
                 if con_node.con_node.check_block_sig(block, block.sig, miner_pk):
                     try:
-                        my_local_chain.add_block(block)
+                        longest_chain_flash_flag = my_local_chain.add_block(block)
                     except:
                         raise ValueError('Add block fail!')
-                    con_node.recv_new_block_flag = 1
+                    if longest_chain_flash_flag:
+                        con_node.recv_new_block_flag = 1
                     print_green(
                         "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
                             len(my_local_chain.chain)))
@@ -537,15 +568,18 @@ class TransMsg:
             elif my_type == "acc": # acc node
                 if acc_node.account.check_block_sig(block, block.sig, miner_pk):
                     try:
-                        my_local_chain.add_block(block)
+                        longest_chain_flash_flag = my_local_chain.add_block(block)
                     except:
                         raise ValueError('Add block fail!')
+                    if longest_chain_flash_flag:
+                        acc_node.check_and_update_VPB_pairs()
                     acc_node.send_package_flag += 0.5  # wait for vpb update, send_package_flag can be 1
                     print_green(
                         "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
                             len(my_local_chain.chain)))
                 else:
                     print('block sig illegal!')
+
             """if my_local_chain.is_valid_block(block): # valid block, otherwise ignore this block
                 if my_type == "con": # con node
                     if con_node.con_node.check_block_sig(block, block.sig, miner_pk):

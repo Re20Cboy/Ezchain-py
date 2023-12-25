@@ -2,7 +2,7 @@
 RANDOM_TXNS = True
 
 # Max fork height
-MAX_FORK_HEIGHT = 6
+MAX_FORK_HEIGHT = 5 # bitcoin's max fork height = 6
 
 # Total number of transactions in the CSV file
 TNX_CSV_NUM = 300

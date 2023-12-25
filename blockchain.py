@@ -48,6 +48,8 @@ class Blockchain:
         if not self.dst: # ez simulate mode
             self.chain.append(block)
         else: # DST mode
+            # set longest chain flash flag
+            longest_chain_flash_flag = False
             # make fork block
             fork_block = ForkBlock(block)
             # genesis block
@@ -55,6 +57,7 @@ class Blockchain:
                 self.chain.append(block)
                 self.latest_fork_block = fork_block
                 self.real_chain = fork_block
+                longest_chain_flash_flag = True
             # non-genesis block
             else:
                 # new block match the longest chain
@@ -69,6 +72,8 @@ class Blockchain:
                     self.add_to_real_chain(self.latest_fork_block, fork_block)
                     # flash latest fork block
                     self.latest_fork_block = fork_block
+                    # flash flag
+                    longest_chain_flash_flag = True
                 else: # new block NOT match the longest chain
                     pre_fork_block = find_pre_block_traversal_fork_blocks(root=self.real_chain, block=block)
                     if pre_fork_block == None:
@@ -79,6 +84,9 @@ class Blockchain:
                     if fork_block.block.get_index() > self.get_latest_block_index():
                         self.flash_longest_chain(fork_block)
                         self.latest_fork_block = fork_block
+                        # flash flag
+                        longest_chain_flash_flag = True
+            return longest_chain_flash_flag
 
     def flash_longest_chain(self, entry_fork_block):
         tmp_pre_block = entry_fork_block.pre_block.block
@@ -93,6 +101,46 @@ class Blockchain:
         # add new chain part
         for new_block in block_lst_need_to_add:
             self.add_to_longest_chain(new_block)
+
+    def find_fork_block_via_block_hash_dst(self, block_hash, root):
+        # traversal fork chain to find aim fork block
+        # root is genesis block in fork chain
+        if root is None:
+            return None
+        if root.block.get_hash() == block_hash:
+            return root.block
+        if root.next_blocks == []:
+            return None
+        for next_block in root.next_blocks:
+            result = self.find_fork_block_via_block_hash_dst(block_hash=block_hash, root=next_block)
+            if result is not None:
+                return result
+        return None
+
+    def find_block_via_block_hash_dst(self, block_hash):
+        # fast find aim block in longest chain,
+        # if not find, then traversal fork chain.
+        latest_block_index = self.get_latest_block_index()
+        index = 0
+        # check this block hash is in longest chain
+        while latest_block_index-index >= 0:
+            if self.chain[latest_block_index-index].get_hash() == block_hash:
+                return self.chain[latest_block_index-index]
+            else:
+                index += 1
+        # check this block hash is in fork chain
+        return self.find_fork_block_via_block_hash_dst(block_hash=block_hash, root=self.real_chain)
+
+    def check_block_hash_is_in_longest_chain(self, block_hash):
+        latest_block_index = self.get_latest_block_index()
+        index = 0
+        # check this block hash is in longest chain
+        while latest_block_index - index >= 0:
+            if self.chain[latest_block_index - index].get_hash() == block_hash:
+                return latest_block_index - index
+            else:
+                index += 1
+        return False
 
     def get_latest_block(self):
         return self.chain[-1]

@@ -9,6 +9,7 @@ import pickle
 from Distributed_acc_node_i import DstAcc
 import unit
 import blockchain
+import random
 
 class TestBloomFilter(unittest.TestCase):
     def setUp(self):
@@ -117,6 +118,14 @@ class TestForkBlockchain(unittest.TestCase):
         # add genesis block
         self.fork_bc.add_block(genesis_block)
 
+    def flash_fork_bc(self):
+        EZs = EZsimulate()
+        # generate genesis block
+        genesis_block = EZs.generate_GenesisBlock()
+        self.fork_bc = blockchain.Blockchain(dst=True)
+        # add genesis block
+        self.fork_bc.add_block(genesis_block)
+
     def test_add_main_chain_block(self, add_round=5): # add block belong to main (longest) chain
         for i in range(add_round):
             new_index = self.fork_bc.get_latest_block_index() + 1
@@ -134,29 +143,97 @@ class TestForkBlockchain(unittest.TestCase):
             print('longest chain is NOT vaild.')
 
     def test_add_fork_block(self, main_block_num=10, fork_num=3, block_num_in_one_fork=3):
+        # init parm for next test
+        random_longest_chain_block_hash = None
+        random_fork_chain_block_hash = None
+        random_longest_flag = random.randint(1, main_block_num) # create random test block index in longest chain
+        random_fork_flag_1 = random.randint(0, fork_num-1) # create random test fork index
+        random_fork_flag_2 = random.randint(0, block_num_in_one_fork-1) # create random test block index in fork chain
+
         # init main chain
         for i in range(main_block_num):
             new_index = self.fork_bc.get_latest_block_index() + 1
             new_pre_hash = self.fork_bc.get_latest_block().get_hash()
             # random generate a new block belong to main chain
-            new_block = Block(index=new_index, m_tree_root='test_merkel_tree_root', miner='test_miner',
+            # ***: miner='test_miner_'+str(i), where str(i) can avoid same block hash
+            new_block = Block(index=new_index, m_tree_root='test_merkel_tree_root', miner='test_miner_'+str(i),
                               pre_hash=new_pre_hash)
             self.fork_bc.add_block(new_block)
+            # create test block hash for next test
+            if i+1 == random_longest_flag:
+                print('ans of longest chain block: ' + str(new_block))
+                random_longest_chain_block_hash = new_block.get_hash()
+                print('ans of hash: ' + str(random_longest_chain_block_hash))
         # add fork block to main chain
         for i in range(fork_num):
-            entry_block = self.fork_bc.chain[i]
+            pre_block_hash = self.fork_bc.chain[i].get_hash()
             for j in range(block_num_in_one_fork):
                 new_index = self.fork_bc.chain[i].get_index() + 1 + j
-                new_pre_hash = entry_block.get_hash()
-                new_block = Block(index=new_index, m_tree_root='test_merkel_tree_root', miner='test_miner',
-                                  pre_hash=new_pre_hash)
-                entry_block = new_block
+                # ***: miner='test_miner_'+str(i)+str(j), where str(i) can avoid same block hash
+                new_block = Block(index=new_index, m_tree_root='test_merkel_tree_root', miner='test_miner_'+str(i)+str(j),
+                                  pre_hash=pre_block_hash)
+                pre_block_hash = new_block.get_hash()
                 self.fork_bc.add_block(new_block)
+                if i == random_fork_flag_1 and j == random_fork_flag_2:
+                    print('ans of fork chain block: ' + str(new_block))
+                    random_fork_chain_block_hash = new_block.get_hash()
+                    print('ans of hash: ' + str(random_fork_chain_block_hash))
         # print fork chain
         self.fork_bc.print_real_chain_dst(fork_block=self.fork_bc.real_chain)
+        # return generated fork chain
+        return self.fork_bc, random_longest_chain_block_hash, random_fork_chain_block_hash, random_longest_flag, random_fork_flag_1, random_fork_flag_2
 
     def test_add_fork_fork_block(self):
         pass
+
+    def test_find_fork_block_via_block_hash_dst(self, main_block_num=10, fork_num=3, block_num_in_one_fork=3):
+        # generate blockchain and random block hash for test
+        fork_bc, random_longest_chain_block_hash, random_fork_chain_block_hash, random_longest_flag, random_fork_flag_1, random_fork_flag_2 = (
+            self.test_add_fork_block(main_block_num, fork_num, block_num_in_one_fork))
+        result_fork_chain_block = fork_bc.find_fork_block_via_block_hash_dst(block_hash=random_fork_chain_block_hash,root=fork_bc.real_chain)
+        # print result
+        print("-------------------")
+        print("ANS: random_fork_chain_block_hash = " + str(random_fork_chain_block_hash))
+        print("random_fork_1 = " + str(random_fork_flag_1) + " and random_fork_flag_2 = " + str(random_fork_flag_2))
+        print("result_fork_chain_block: " + str(result_fork_chain_block))
+        print("and its hash = " + str(result_fork_chain_block.get_hash()))
+
+    def test_find_block_via_block_hash_dst(self, main_block_num=10, fork_num=3, block_num_in_one_fork=3):
+        # generate blockchain and random block hash for test
+        fork_bc, random_longest_chain_block_hash, random_fork_chain_block_hash, random_longest_flag, random_fork_flag_1, random_fork_flag_2 = (
+            self.test_add_fork_block(main_block_num, fork_num, block_num_in_one_fork))
+        result_longest_chain_block = fork_bc.find_block_via_block_hash_dst(random_longest_chain_block_hash)
+        result_fork_chain_block = fork_bc.find_block_via_block_hash_dst(random_fork_chain_block_hash)
+        # print result
+        print("-------------------")
+        print("ANS: random_longest_chain_block_hash = " + str(random_longest_chain_block_hash))
+        print("random_longest_flag = " + str(random_longest_flag))
+        print("result_longest_chain_block: "+str(result_longest_chain_block))
+        print("and its hash = " + str(result_longest_chain_block.get_hash()))
+        print("-------------------")
+        print("ANS: random_fork_chain_block_hash = " + str(random_fork_chain_block_hash))
+        print("random_fork_1 = " + str(random_fork_flag_1) + " and random_fork_flag_2 = " + str(random_fork_flag_2))
+        print("result_fork_chain_block: " + str(result_fork_chain_block))
+        print("and its hash = " + str(result_fork_chain_block.get_hash()))
+
+    def test_check_block_hash_is_in_longest_chain(self, main_block_num=10, fork_num=2, block_num_in_one_fork=2):
+        # generate blockchain and random block hash for test
+        for _ in range(100):
+            fork_bc, random_longest_chain_block_hash, random_fork_chain_block_hash, random_longest_flag, random_fork_flag_1, random_fork_flag_2 = (
+                self.test_add_fork_block(main_block_num, fork_num, block_num_in_one_fork))
+            result_longest_chain_block = fork_bc.check_block_hash_is_in_longest_chain(random_longest_chain_block_hash)
+            result_fork_chain_block = fork_bc.check_block_hash_is_in_longest_chain(random_fork_chain_block_hash)
+            #print("random_longest_flag = " + str(random_longest_flag))
+            #print("result_longest_chain_block = " + str(result_longest_chain_block))
+            #print("random_fork_1 = " + str(random_fork_flag_1) + " and random_fork_flag_2 = " + str(random_fork_flag_2))
+            #print("result_fork_chain_block = " + str(result_fork_chain_block))
+            if result_longest_chain_block == False or result_fork_chain_block != False:
+                print("random_longest_flag = " + str(random_longest_flag))
+                print("result_longest_chain_block = " + str(result_longest_chain_block))
+                print("random_fork_1 = " + str(random_fork_flag_1) + " and random_fork_flag_2 = " + str(random_fork_flag_2))
+                print("result_fork_chain_block = " + str(result_fork_chain_block))
+                break
+            self.flash_fork_bc()
 
 if __name__ == '__main__':
     unittest.main()

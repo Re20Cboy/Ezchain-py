@@ -28,6 +28,8 @@ class DstAcc:
         self.this_round_txns_num = 0
         self.this_round_success_txns_num = 0
         self.this_round_block_index = None
+        self.temp_recv_mTree_prf = [] # temp storage recved (mTreePrf, block_index, block_hash) from miner
+        self.temp_sent_package = [] # temp storage sent acc txn package, type as [(acc_txns, acc_txns_package), ...]
 
     def send_txns_to_txn_pool(self):
         pass
@@ -137,6 +139,46 @@ class DstAcc:
                 self.trans_msg.brd_acc_txns_package_to_con_node(acc_txns_package)
                 self.send_package_flag = 0
                 self.account.accTxns = acc_txns
+                self.temp_sent_package.append((acc_txns, acc_txns_package))
+
+    def check_and_update_VPB_pairs(self):
+        if self.temp_recv_mTree_prf == []:
+            return
+        for mTree_prf_pair in self.temp_recv_mTree_prf:
+            (mTreePrf, block_index, block_hash, txn_related_values) = mTree_prf_pair
+            # check block_index with block_hash
+            result_block = self.blockchain.find_block_via_block_hash_dst(block_hash)
+            if result_block == None:
+                # not find block related to this mTree_prf_pair
+                continue # skip this mTree_prf_pair
+            if result_block.get_index() != block_index:
+                # block_index and block_hash do not match
+                # todo: del and process this mTree_prf_pair
+                continue
+            # todo: check mTree root with block
+
+            # update self VPB pairs if :
+            # 1.) this mTree_prf_pair cover at lest MAX_FORK_HEIGHT blocks
+            # 2.) and mTree_prf_pair should be in the longest chain
+            # 1.) and 2.) ensure that this mTree_prf_pair CANNOT be changed via fork
+            if (self.blockchain.get_latest_block_index() - block_index + 1 >= MAX_FORK_HEIGHT
+                    and self.blockchain.check_block_hash_is_in_longest_chain(block_hash)):
+                try:
+                    self.account.update_VPB_pairs_dst(mTreePrf, block_index, txn_related_values)
+                except Exception as e:
+                    raise RuntimeError("An error occurred in acc_node.update_VPB_pairs_dst: " + str(e))
+                print('Update VPB pair success.')
+                # send VPB pairs to recipient
+                recipient_addr, need_send_vpb_index = self.account.send_VPB_pairs_dst()
+                for index, item in enumerate(recipient_addr):
+                    recipient_ip, recipient_port = self.trans_msg.find_neighbor_ip_and_port_via_addr(item)
+                    need_send_vpb = []
+                    for i in need_send_vpb_index[index]:
+                        need_send_vpb.append(self.account.ValuePrfBlockPair[i])
+                    self.trans_msg.tcp_send(other_tcp_port=recipient_port, data_to_send=need_send_vpb, msg_type="VPBPair",
+                                  other_ip=recipient_ip)
+                # start send new package to txn pool
+                self.send_package_flag += 0.4
 
     def entry_point(self, Dst_acc):
         print('enrty point!')

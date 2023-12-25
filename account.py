@@ -84,6 +84,15 @@ class Account:
         # Update the balance
         self.balance += item[0].valueNum
 
+    def add_VPBpair_dst(self, item):
+        # design add VPB pair func for DST mode
+        # the VPB add in DST mode should be re-design since distribute network
+        # todo: new VPB pair should be updated, then add to local VPB lst.
+
+        self.ValuePrfBlockPair.append(item)
+        # Update the balance
+        self.balance += item[0].valueNum
+
     def delete_VPBpair(self, index):
         # Update the balance
         self.balance -= self.ValuePrfBlockPair[index][0].valueNum
@@ -325,8 +334,6 @@ class Account:
                 for index in costList:
                     tmpValues.append(self.ValuePrfBlockPair[index][0])
                     self.costedValuesAndRecipes.append((self.ValuePrfBlockPair[index][0], tmpRecipient))
-                    # Delete this value
-                    # self.delete_VPBpair(i)
                 tmpTxn = transaction.Transaction(sender=tmpSender, recipient=tmpRecipient,
                                                  nonce=tmpNonce, signature=None, value=tmpValues,
                                                  tx_hash=tmpTxnHash, time=tmpTime)
@@ -348,6 +355,7 @@ class Account:
 
                 tmpP = self.ValuePrfBlockPair[changeValueIndex][1]
                 tmpB = self.ValuePrfBlockPair[changeValueIndex][2]
+
                 self.delete_VPBpair(changeValueIndex)
                 self.add_VPBpair([changeTxn2Recipient.Value[0], copy.deepcopy(tmpP), copy.deepcopy(tmpB)])  # V1 cannot be used in subsequent transactions in this round
                 self.add_VPBpair([changeTxn2Sender.Value[0], copy.deepcopy(tmpP), copy.deepcopy(tmpB)])
@@ -833,7 +841,8 @@ class Account:
         except:
             return False
 
-    def update_VPB_pairs_dst(self, mTree_proof, block_index):
+    def update_VPB_pairs_dst(self, mTree_proof, block_index, txn_related_values):
+        # *** the mTree_proof is immutable since it has experienced at least MAX_FORK_HEIGHT blocks
         sender = self.addr  # sender的account类型为self.accounts[i]
         # 提取senderTxns中的每个交易涉及到的每个值
         owner = sender
@@ -843,29 +852,32 @@ class Account:
 
         VList = [t[0] for t in self.ValuePrfBlockPair]
         costedValueAndRecipeList = self.costedValuesAndRecipes
+        # the value in costed lst should be processed specially
         for (costedV, recipient) in costedValueAndRecipeList:  # 账户本轮花费的值
             for item, V in enumerate(VList, start=0):  # 账户当前持有的值
                 if V.isSameValue(costedV):
+                    # change the owner of value
                     prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
                                              ownerMTreePrfList=ownerMTreePrfList)
                     self.ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
                     self.ValuePrfBlockPair[item][2].append(copy.deepcopy(block_index))
                     costValueIndex.append(item)
-                    # 测试是否有重复值加入
+                    # test: if the value is added repeatedly
                     test = self.ValuePrfBlockPair[item][2]
                     if len(test) > 2 and test[-1] == test[-2]:
-                        raise ValueError("发现VPB添加错误！！！！")
-
+                        raise ValueError("ERR: add VPB failed!")
+        # process the value not in costed lst
         for j, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
             if j not in costValueIndex:
+                # NOT change the owner
                 prfUnit = unit.ProofUnit(owner=owner, ownerAccTxnsList=ownerAccTxnsList,
                                          ownerMTreePrfList=ownerMTreePrfList)
                 self.ValuePrfBlockPair[j][1].add_prf_unit(prfUnit)
                 self.ValuePrfBlockPair[j][2].append(copy.deepcopy(block_index))
-                # 测试是否有重复值加入
+                # test: if the value is added repeatedly
                 test = self.ValuePrfBlockPair[j][2]
                 if len(test) > 2 and test[-1] == test[-2]:
-                    raise ValueError("发现VPB添加错误！！！！")
+                    raise ValueError("ERR: add VPB failed!")
 
     def tool_for_send_VPB_pairs_dst(self, recipients, vpb_index):
         merged_dict = defaultdict(list)

@@ -109,11 +109,12 @@ class DstConNode:
                     # send mTree prf to all acc nodes
                     mTree = new_block_body.info
                     block_index = new_block.index
+                    block_hash = new_block.get_hash()
                     for index, acc_neighbor_uuid in enumerate(self.txns_pool.sender_id, start=0):
                         acc_ip, acc_port = self.trans_msg.find_neighbor_ip_and_port_via_uuid(acc_neighbor_uuid)
                         if acc_port == None:
                             raise ValueError('Not find valid acc port!')
-                        new_msg = (mTree.prfList[index], block_index)
+                        new_msg = (mTree.prfList[index], block_index, block_hash)
                         self.trans_msg.tcp_send(other_tcp_port=acc_port, data_to_send=new_msg, msg_type="MTreeProof",other_ip=acc_ip)
                     break # return this round mine
             if mine_success:

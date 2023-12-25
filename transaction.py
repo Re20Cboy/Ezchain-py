@@ -119,6 +119,9 @@ class Transaction:
         except:
             return False
 
+    def get_values(self):
+        return self.Value
+
     def PrintTx(self):
         vals = [self.Sender, self.Recipient, self.Value, self.TxHash]
         res = f"{vals}\n"
