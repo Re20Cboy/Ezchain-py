@@ -44,6 +44,7 @@ class Account:
         self.accRoundAllCostList = []  # Records the total storage cost of VPB+CK for this node each round
         self.delete_vpb_list = []
 
+
     def test(self):
         test = copy.deepcopy(self.ValuePrfBlockPair)
         for i, vpb in enumerate(self.ValuePrfBlockPair):
@@ -821,6 +822,37 @@ class Account:
             new_proof = []
             pass
 
+    def check_VPB_pair_self_dst(self, VPBpair, blockchain):
+        # this func is self check for VPB pair, which is prepared to be sent
+        # without VPB self check, some proof may be loss in distribute network
+        block_index_lst = VPBpair[2]
+        latest_block_index = block_index_lst[-1]
+        # traverse longest chain, and check if some proof be loss
+        if latest_block_index > blockchain.get_latest_block_index():
+            return False
+        # find the block index when this value first recv by this acc node
+        start_index = None
+        self_addr = self.addr
+        if VPBpair[1].prfList[-2].owner != self_addr: # in the latest prf unit, value has been transfered to new owner, [-2] must be self
+            return False # if not self, means that some proofs are loss
+        latest_prf_index = len(VPBpair[1].prfList) - 2 # index of latest prf, where self owns this value
+        end_index = len(VPBpair[1].prfList) - 2
+        while latest_prf_index >= 0:
+            if VPBpair[1].prfList[latest_prf_index].owner != self_addr:
+                # find the first block index where self recv this value
+                start_index = latest_prf_index + 1
+            latest_prf_index -= 1
+        # check blockchain's bloom (include self addr?) within [blockchain.chain[VPBpair[2][start_index]], blockchain.chain[VPBpair[2][end_index]]]
+        index = VPBpair[2][start_index]
+        real_block_index = []
+        while index <= VPBpair[2][end_index]:
+            if self_addr in blockchain.chain[index].bloom:
+                real_block_index.append(index)
+        if real_block_index != block_index_lst[start_index: end_index + 1]:
+            # blockchain's bloom does not match the block index list in VPBpair
+            return False
+
+
     def check_block_sig(self, block, signature, load_public_key):
         # 从公钥路径加载公钥
         # with open(load_public_key_path, "rb") as key_file:
@@ -841,7 +873,8 @@ class Account:
         except:
             return False
 
-    def update_VPB_pairs_dst(self, mTree_proof, block_index, txn_related_values):
+    def update_VPB_pairs_dst(self, mTree_proof, block_index, costed_values_and_recipes):
+        # todo: achieve the logic of txn_related_values
         # *** the mTree_proof is immutable since it has experienced at least MAX_FORK_HEIGHT blocks
         sender = self.addr  # sender的account类型为self.accounts[i]
         # 提取senderTxns中的每个交易涉及到的每个值
@@ -851,16 +884,18 @@ class Account:
         costValueIndex = []  # 用于记录本轮中所有参与交易的值的VPB对的index
 
         VList = [t[0] for t in self.ValuePrfBlockPair]
-        costedValueAndRecipeList = self.costedValuesAndRecipes
         # the value in costed lst should be processed specially
-        for (costedV, recipient) in costedValueAndRecipeList:  # 账户本轮花费的值
+        for (costedV, recipient) in costed_values_and_recipes:  # 账户本轮花费的值
             for item, V in enumerate(VList, start=0):  # 账户当前持有的值
                 if V.isSameValue(costedV):
-                    # change the owner of value
+                    # create proof unit
                     prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
                                              ownerMTreePrfList=ownerMTreePrfList)
+                    # update VPB pair
                     self.ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
                     self.ValuePrfBlockPair[item][2].append(copy.deepcopy(block_index))
+                    # check if this VPB can pass recipe's test
+
                     costValueIndex.append(item)
                     # test: if the value is added repeatedly
                     test = self.ValuePrfBlockPair[item][2]

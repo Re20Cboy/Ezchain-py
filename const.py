@@ -37,7 +37,7 @@ ONE_HASH_SUCCESS_RATE = 0.01
 PICK_TXNS_NUM = int(ACCOUNT_NUM * ACCOUNT_NUM / 2)
 
 # Number of mining rounds
-SIMULATE_ROUND = 3
+SIMULATE_ROUND = 10
 
 # Network bandwidth (bytes)
 BANDWIDTH = 1024 * 1024 * 1

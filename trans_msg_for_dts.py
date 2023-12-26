@@ -283,7 +283,7 @@ class TransMsg:
         # acc node should wait for MAX_FORK_HEIGHT blocks for unchanged longest chain
         # todo: wait for MAX_FORK_HEIGHT blocks to del confirmed VPB pairs, and within [# push block, # confirm block] they are unavailable
         # find the related values in this acc_txns_package
-        acc_package_hash = mTreePrf[0]
+        acc_package_hash = mTreePrf[0] # todo: [0] is the hash of acc package? or maybe [1]?
         # find related corresponding temporary package
         if acc_node.temp_sent_package != []:
             related_values = [] # record related values

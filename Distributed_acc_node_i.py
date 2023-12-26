@@ -8,6 +8,7 @@ import transaction
 import copy
 from blockchain import Blockchain
 from const import *
+import hashlib
 
 # Create Threads Function
 def daemon_thread_builder(target, args=()) -> threading.Thread:
@@ -126,6 +127,22 @@ class DstAcc:
                 self.entry_point(Dst_acc)
                 return
 
+    def find_acc_txns_via_package_hash(self, package_hash):
+        # unit hash tool
+        def hash(val):
+            if type(val) == str:
+                return hashlib.sha256(val.encode("utf-8")).hexdigest()
+            else:
+                return hashlib.sha256(val).hexdigest()
+        index_of_package = len(self.temp_sent_package) - 1
+        while index_of_package >= 0:
+            (acc_txns, acc_txns_package) = self.temp_sent_package[index_of_package]
+            aim_hash = hash(acc_txns_package)
+            if aim_hash == package_hash:
+                return acc_txns
+            index_of_package -= 1
+        return None
+
     def send_package_to_txn_pool(self):
         while True:
             if self.send_package_flag == 1:
@@ -141,11 +158,15 @@ class DstAcc:
                 self.account.accTxns = acc_txns
                 self.temp_sent_package.append((acc_txns, acc_txns_package))
 
-    def check_and_update_VPB_pairs(self):
+    def update_and_check_VPB_pairs(self):
+        # 1.) longest chain flash, thus update self VPB pairs
+        # 2.) after update, check which VPB can be sent
+
         if self.temp_recv_mTree_prf == []:
             return
+        # scan every temp mtree proof
         for mTree_prf_pair in self.temp_recv_mTree_prf:
-            (mTreePrf, block_index, block_hash, txn_related_values) = mTree_prf_pair
+            (mTreePrf, block_index, block_hash) = mTree_prf_pair
             # check block_index with block_hash
             result_block = self.blockchain.find_block_via_block_hash_dst(block_hash)
             if result_block == None:
@@ -164,10 +185,23 @@ class DstAcc:
             if (self.blockchain.get_latest_block_index() - block_index + 1 >= MAX_FORK_HEIGHT
                     and self.blockchain.check_block_hash_is_in_longest_chain(block_hash)):
                 try:
-                    self.account.update_VPB_pairs_dst(mTreePrf, block_index, txn_related_values)
+                    # find costed_values_and_recipes via mTreePrf[0], i.e., acc_txns_package's hash
+                    related_acc_txns = self.find_acc_txns_via_package_hash(mTreePrf[0])
+                    costed_values_and_recipes = []
+                    for acc_txn in related_acc_txns:
+                        value_lst = acc_txn.get_values()
+                        recipes = acc_txn.Recipient
+                        for one_value in value_lst:
+                            costed_values_and_recipes.append((one_value, recipes))
+                    # update this VPB pair
+                    self.account.update_VPB_pairs_dst(mTreePrf, block_index, costed_values_and_recipes)
                 except Exception as e:
                     raise RuntimeError("An error occurred in acc_node.update_VPB_pairs_dst: " + str(e))
                 print('Update VPB pair success.')
+                # todo: check if this vpb need to be sent
+                #  AND this VPB can pass test
+
+
                 # send VPB pairs to recipient
                 recipient_addr, need_send_vpb_index = self.account.send_VPB_pairs_dst()
                 for index, item in enumerate(recipient_addr):
