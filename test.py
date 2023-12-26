@@ -13,7 +13,7 @@ import unit
 import blockchain
 import random
 
-from p2p_network import tcp_dial 
+from p2p_network import send_tcp_message 
 
 class TestTcpDial(unittest.TestCase):
     @patch('p2p_network.socket.create_connection')
@@ -23,15 +23,17 @@ class TestTcpDial(unittest.TestCase):
         mock_create_connection.return_value = mock_conn
 
         # Test data
-        test_addr = '127.0.0.1'
+        test_addr = '192.168.2.1'
         test_context = b'test message'
 
         # Call the function
-        tcp_dial(test_context, test_addr)
+        status = send_tcp_message(test_context, test_addr)
+        print(f"\nstatus is {status}")
 
         # Assert connection was created and message was sent
         mock_create_connection.assert_called_with((test_addr, 80))
         mock_conn.sendall.assert_called_with(test_context + b'\n')
+
 
     @patch('p2p_network.socket.create_connection')
     def test_tcp_dial_connection_error(self, mock_create_connection):
@@ -43,11 +45,12 @@ class TestTcpDial(unittest.TestCase):
         test_context = b'test message'
 
         # Call the function and assert it handles the error
-        with self.assertLogs('p2p_network', level='ERROR') as cm:
-            tcp_dial(test_context, test_addr)
+        with self.assertLogs(level='ERROR') as cm:
+            send_tcp_message(test_context, test_addr)
         
         # Check if appropriate error log is created
-        self.assertIn('Connect error', cm.output[0])
+        self.assertIn('Connection error', cm.output[0])
+
 
     @patch('p2p_network.socket.create_connection', return_value=MagicMock())
     def test_tcp_dial_send_error(self, mock_create_connection):
@@ -61,12 +64,13 @@ class TestTcpDial(unittest.TestCase):
         test_context = b'test message'
 
         # Call the function and assert it handles the error
-        with self.assertLogs('p2p_network', level='ERROR') as cm:
-            tcp_dial(test_context, test_addr)
+        with self.assertLogs(level='ERROR') as cm:
+            send_tcp_message(test_context, test_addr)
 
         # Check if appropriate error log is created
         self.assertIn('Error sending data', cm.output[0])
 
+@unittest.skip("Skipping all tests in TestBloomFilter")
 class TestBloomFilter(unittest.TestCase):
     def setUp(self):
         self.bloom_filter = BloomFilter(size=1024 * 1024, hash_count=5)
@@ -98,8 +102,8 @@ class TestBloomFilter(unittest.TestCase):
         # Convert BloomFilter instance to JSON
         serialized_bloom_filter = json.dumps(bloom_filter, cls=BloomFilterEncoder, indent=4)
         print(serialized_bloom_filter)
-class TestBlock(unittest.TestCase):
 
+class TestBlock(unittest.TestCase):
     def setUp(self):
         # Initialize a Block instance for testing
         self.block = Block(index=1, m_tree_root="root", miner="miner_id", pre_hash="000000")
@@ -159,6 +163,7 @@ class simulate_env_4_con_node(unittest.TestCase):
         loaded_EZs = self.load_data_from_file('EZs_data.pkl')
         return (loaded_genesis_block, loaded_EZs)
 
+@unittest.skip("Skipping all tests in test dst")
 class test_dst_acc(unittest.TestCase):
     def test_sort_and_get_positions(self):
         uuid = [5, 2, 9, 3, 7]

@@ -9,30 +9,48 @@ conn_map_lock = threading.Lock()
 # Initialize the connection pool as a dictionary
 connection_pool = {}
 
-# Example usage
-# tcp_dial(b"Hello, world", "192.168.1.1")
-def tcp_dial(context, addr):
+# Example call
+# status = send_tcp_message(b"Hello, world", "192.168.1.1")
+# if status < 0:
+#    print("Error occurred")
+def send_tcp_message(context, addr, port=80):
+    """
+    Sends a TCP message to a specified address and port.
+    Reuses connections if available in the global connection pool.
+
+    :param context: The message to be sent (bytes).
+    :param addr: The target address (str).
+    :param port: The target port (int), default is 80.
+    :return: Error code or success status.
+    """
     global connection_pool
 
     with conn_map_lock:
+        # Create a unique key for the connection
+        conn_key = (addr, port)
+
         # Check if the connection already exists in the pool
-        if addr not in connection_pool:
+        if conn_key not in connection_pool:
             try:
                 # Create a new TCP connection
-                conn = socket.create_connection((addr, 80))  # Assuming port 80, modify as needed
-                connection_pool[addr] = conn
+                conn = socket.create_connection(conn_key)
+                connection_pool[conn_key] = conn
             except socket.error as e:
-                logging.error(f"Connect error: {e}")
-                return
+                logging.error(f"Connection error to {addr}:{port} - {e}")
+                return -1  # Indicating error in connection
 
-        conn = connection_pool[addr]
+        conn = connection_pool[conn_key]
 
     try:
         # Send the context data with a newline character at the end
         conn.sendall(context + b'\n')
+        return 0  # Indicating success
     except socket.error as e:
         # Handle potential write errors
-        logging.error(f"Error sending data: {e}")
+        logging.error(f"Error sending data to {addr}:{port} - {e}")
+        return -2  # Indicating error in sending data
+
+
 
 # Usage Example
 # Suppose the sender has IP '192.168.1.1' and wants to broadcast a message to two other IPs.
@@ -53,7 +71,7 @@ def broadcast(sender, receivers, msg):
     def dial(receiver):
         # Skip sending to the sender itself
         if receiver != sender:
-            tcp_dial(msg, receiver)
+            send_tcp_message(msg, receiver)
 
     # Start a new thread for each receiver
     for ip in receivers:
