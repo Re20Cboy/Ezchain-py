@@ -12,6 +12,7 @@ from Distributed_acc_node_i import DstAcc
 import unit
 import blockchain
 import random
+from account import Account
 
 from p2p_network import send_tcp_message 
 
@@ -222,9 +223,9 @@ class TestForkBlockchain(unittest.TestCase):
             self.fork_bc.add_block(new_block)
             # create test block hash for next test
             if i+1 == random_longest_flag:
-                print('ans of longest chain block: ' + str(new_block))
+                # print('ans of longest chain block: ' + str(new_block))
                 random_longest_chain_block_hash = new_block.get_hash()
-                print('ans of hash: ' + str(random_longest_chain_block_hash))
+                # print('ans of hash: ' + str(random_longest_chain_block_hash))
         # add fork block to main chain
         for i in range(fork_num):
             pre_block_hash = self.fork_bc.chain[i].get_hash()
@@ -236,11 +237,11 @@ class TestForkBlockchain(unittest.TestCase):
                 pre_block_hash = new_block.get_hash()
                 self.fork_bc.add_block(new_block)
                 if i == random_fork_flag_1 and j == random_fork_flag_2:
-                    print('ans of fork chain block: ' + str(new_block))
+                    # print('ans of fork chain block: ' + str(new_block))
                     random_fork_chain_block_hash = new_block.get_hash()
-                    print('ans of hash: ' + str(random_fork_chain_block_hash))
+                    # print('ans of hash: ' + str(random_fork_chain_block_hash))
         # print fork chain
-        self.fork_bc.print_real_chain_dst(fork_block=self.fork_bc.real_chain)
+        # self.fork_bc.print_real_chain_dst(fork_block=self.fork_bc.real_chain)
         # return generated fork chain
         return self.fork_bc, random_longest_chain_block_hash, random_fork_chain_block_hash, random_longest_flag, random_fork_flag_1, random_fork_flag_2
 
@@ -289,12 +290,32 @@ class TestForkBlockchain(unittest.TestCase):
             #print("random_fork_1 = " + str(random_fork_flag_1) + " and random_fork_flag_2 = " + str(random_fork_flag_2))
             #print("result_fork_chain_block = " + str(result_fork_chain_block))
             if result_longest_chain_block == False or result_fork_chain_block != False:
+                print("ERR !!!")
                 print("random_longest_flag = " + str(random_longest_flag))
                 print("result_longest_chain_block = " + str(result_longest_chain_block))
                 print("random_fork_1 = " + str(random_fork_flag_1) + " and random_fork_flag_2 = " + str(random_fork_flag_2))
                 print("result_fork_chain_block = " + str(result_fork_chain_block))
                 break
             self.flash_fork_bc()
+
+class TestAccount(unittest.TestCase):
+    def test_tool_for_send_VPB_pairs_dst(self):
+        test_recipients = [1,3,3,1,2]
+        test_vpb_index = [1,2,3,4,5]
+        test_acc_node = Account(ID=0)
+        unique_recipients, new_vpb_index = (
+            test_acc_node.tool_for_send_VPB_pairs_dst(test_recipients, test_vpb_index))
+        print('unique_recipients = ' + str(unique_recipients))
+        print('new_vpb_index = ' + str(new_vpb_index))
+
+class TestUnit(unittest.TestCase):
+    def test_unit_1(self):
+        lst = [1,2,3,4,5]
+        add_position = 100
+        new_element = 'test'
+        lst.insert(add_position, new_element)
+        print(lst)
+        pass
 
 if __name__ == '__main__':
     unittest.main()

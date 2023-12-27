@@ -88,8 +88,6 @@ class Account:
     def add_VPBpair_dst(self, item):
         # design add VPB pair func for DST mode
         # the VPB add in DST mode should be re-design since distribute network
-        # todo: new VPB pair should be updated, then add to local VPB lst.
-
         self.ValuePrfBlockPair.append(item)
         # Update the balance
         self.balance += item[0].valueNum
@@ -823,8 +821,12 @@ class Account:
             pass
 
     def check_VPB_pair_self_dst(self, VPBpair, blockchain):
+        # this block_index means added and unchecked VPB pair's latest B (block_index),
+        # where the value is confirmed on the longest chain
+
         # this func is self check for VPB pair, which is prepared to be sent
         # without VPB self check, some proof may be loss in distribute network
+
         block_index_lst = VPBpair[2]
         latest_block_index = block_index_lst[-1]
         # traverse longest chain, and check if some proof be loss
@@ -873,48 +875,103 @@ class Account:
         except:
             return False
 
-    def update_VPB_pairs_dst(self, mTree_proof, block_index, costed_values_and_recipes):
-        # todo: achieve the logic of txn_related_values
+    def update_VPB_pairs_dst(self, mTree_proof, block_index, costed_values_and_recipes, blockchain):
+        # this function update self VPB pair, and return the value index that need to be sent
         # *** the mTree_proof is immutable since it has experienced at least MAX_FORK_HEIGHT blocks
-        sender = self.addr  # sender的account类型为self.accounts[i]
-        # 提取senderTxns中的每个交易涉及到的每个值
+        sender = self.addr
         owner = sender
         ownerAccTxnsList = self.accTxns
         ownerMTreePrfList = mTree_proof
-        costValueIndex = []  # 用于记录本轮中所有参与交易的值的VPB对的index
+        costValueIndex = []  # record the VPB's index can be sent
+        cost_value_recipient = [] # record the list of recipient of VPB (that will be sent).
+        added_value_index = [] # record the VPB's index which have been added new VPB
 
         VList = [t[0] for t in self.ValuePrfBlockPair]
         # the value in costed lst should be processed specially
-        for (costedV, recipient) in costed_values_and_recipes:  # 账户本轮花费的值
-            for item, V in enumerate(VList, start=0):  # 账户当前持有的值
+        for (costedV, recipient) in costed_values_and_recipes:
+            # for all: values and recipients in this acc_txns_package
+            for item, V in enumerate(VList, start=0):
+                # for all: values that self owns
                 if V.isSameValue(costedV):
                     # create proof unit
                     prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
                                              ownerMTreePrfList=ownerMTreePrfList)
-                    # update VPB pair
+                    # update VPB pair (since this value will be sent, the vpb info should be added in the latest position)
                     self.ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
                     self.ValuePrfBlockPair[item][2].append(copy.deepcopy(block_index))
-                    # check if this VPB can pass recipe's test
-
-                    costValueIndex.append(item)
-                    # test: if the value is added repeatedly
+                    # test: if the value's block index is added repeatedly
+                    # the longest chain's record of value's block index CANNOT be repeated
                     test = self.ValuePrfBlockPair[item][2]
                     if len(test) > 2 and test[-1] == test[-2]:
                         raise ValueError("ERR: add VPB failed!")
+                    # update added_value_index
+                    added_value_index.append(item)
+                    # check if this VPB can pass recipient's test
+                    if self.check_VPB_pair_self_dst(VPBpair=self.ValuePrfBlockPair[item],
+                                                 blockchain=blockchain):
+                        # this value's P&B is checked and can be sent to recipient
+                        costValueIndex.append(item)
+                        cost_value_recipient.append(recipient)
+                    else:
+                        # this value is still missing some proof (due to distributed transfer delay or other reason)
+                        pass
+
         # process the value not in costed lst
-        for j, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
-            if j not in costValueIndex:
+        for item, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
+            if item not in added_value_index: # not the values that have been added
                 # NOT change the owner
                 prfUnit = unit.ProofUnit(owner=owner, ownerAccTxnsList=ownerAccTxnsList,
                                          ownerMTreePrfList=ownerMTreePrfList)
-                self.ValuePrfBlockPair[j][1].add_prf_unit(prfUnit)
-                self.ValuePrfBlockPair[j][2].append(copy.deepcopy(block_index))
+                # can not add vpb info directly, should confirm the added position
+                self.add_one_VPB_dst(vbp_index=item, add_prfUnit=prfUnit, add_block_index=block_index)
                 # test: if the value is added repeatedly
-                test = self.ValuePrfBlockPair[j][2]
+                test = self.ValuePrfBlockPair[item][2]
                 if len(test) > 2 and test[-1] == test[-2]:
                     raise ValueError("ERR: add VPB failed!")
+                # check that if the VPB can be sent to recipient after update?
+                if owner != self.ValuePrfBlockPair[item][1].get_latest_prf_unit_owner_dst():
+                    # latest owner is NOT self, thus this vpb should be sent to recipient
+                    # check if this VPB can pass recipient's test
+                    if self.check_VPB_pair_self_dst(VPBpair=self.ValuePrfBlockPair[item],
+                                                    blockchain=blockchain):
+                        # this value's P&B is checked and can be sent to recipient
+                        costValueIndex.append(item)
+                        cost_value_recipient.append(self.ValuePrfBlockPair[item][1].get_latest_prf_unit_owner_dst())
+                    else:
+                        # this value is still missing some proof (due to distributed transfer delay or other reason)
+                        pass
+        return costValueIndex, cost_value_recipient
+
+    def add_one_VPB_dst(self, vbp_index, add_prfUnit, add_block_index):
+        # add one VPB in DST mode
+        # if success added, return True, otherwise, return False
+        # find the position where this vpb should be added in the block index list
+        block_index_lst = self.ValuePrfBlockPair[vbp_index][2]
+        index = len(block_index_lst) - 1
+        add_position = None
+        while index >= 0:
+            if block_index_lst[index] == add_block_index:
+                # this block index has been added, so ignore this vpb
+                return False
+            if block_index_lst[index] < add_block_index:
+                # this position should be added
+                add_position = index + 1
+        if add_position == None:
+            return False
+        # add P & B to self VPB pairs
+        self.ValuePrfBlockPair[vbp_index][1].add_prf_unit_dst(prfUnit=add_prfUnit, add_position=add_position)
+        self.ValuePrfBlockPair[vbp_index][2].insert(add_position, add_block_index)
+        return True
 
     def tool_for_send_VPB_pairs_dst(self, recipients, vpb_index):
+        # make recipient and the values will be sent to him as:
+        # unique_recipients = [recipient_1, recipient_2, ...],
+        # new_vpb_index = [[value_1_1, value_1_2, ...], [value_2_1, value_2_2, ...], ...],
+        # where value_i_j (j=1,2,...) will be sent to recipient_i.
+        # e.g., input: recipient = [1,3,3,1,2]; vpb_index = [1,2,3,4,5]
+        # output: unique_recipients = [1, 3, 2]; new_vpb_index = [[1, 4], [2, 3], [5]]
+        if len(recipients) != len(vpb_index):
+            raise ValueError('ERR: len(recipients) != len(vpb_index)')
         merged_dict = defaultdict(list)
         for index, value in enumerate(recipients):
             merged_dict[value].append(vpb_index[index])
@@ -928,24 +985,21 @@ class Account:
                 self.delete_VPBpair(index)
             self.delete_vpb_list = []
 
-    def send_VPB_pairs_dst(self):
-        del_value_index = []  # Record the index of the value that needs to be deleted
-        recipient_addr = []
-        need_send_vpb_index = []
-        for j, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
-            latestOwner = VPBpair[1].prfList[-1].owner
-            if latestOwner != self.addr:  # owner不再是自己，则传输给新owner，并删除本地备份
-                # send this vpb to recipient
-                recipient_addr.append(latestOwner)
-                need_send_vpb_index.append(j)
-                # acc删除本地VPB备份，不能直接删除，否则循环中已加载的value会出问题
-                del_value_index.append(j)
+    def send_VPB_pairs_dst(self, sent_vpb_index, recipient_addr):
+        # return data struct:
+        # unique_recipients = [recipient_1, recipient_2, ...],
+        # new_vpb_index = [[value_1_1, value_1_2, ...], [value_2_1, value_2_2, ...], ...],
+        # where value_i_j (j=1,2,...) will be sent to recipient_i.
+        del_value_index = copy.deepcopy(sent_vpb_index)  # Record the index of the value that needs to be deleted
+        for index, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
+            if index in sent_vpb_index:
+                del_value_index.append(index)
         # 将需要删除的位置按照降序排序，以免删除元素之后影响后续元素的索引
         del_value_index.sort(reverse=True)
         self.delete_vpb_list = del_value_index # wait for send
         """for i in del_value_index:
             self.delete_VPBpair(i)"""
-        (unique_recipients, new_vpb_index) = self.tool_for_send_VPB_pairs_dst(recipient_addr, need_send_vpb_index)
+        (unique_recipients, new_vpb_index) = self.tool_for_send_VPB_pairs_dst(recipient_addr, sent_vpb_index)
         return unique_recipients, new_vpb_index
 
     def clear_and_fresh_info_dst(self):

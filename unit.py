@@ -110,6 +110,11 @@ class Proof:
     def add_prf_unit(self, prfUint):
         self.prfList.append(prfUint)
 
+    def add_prf_unit_dst(self, prfUnit, add_position):
+        self.prfList.insert(add_position, prfUnit)
+
+    def get_latest_prf_unit_owner_dst(self):
+        return self.prfList[-1].owner
 
 class Value:  # 针对VCB区块链的专门设计的值结构，总量2^259 = 16^65
     def __init__(self, beginIndex, valueNum):  # beginIndex是16进制str，valueNum是10进制int

@@ -285,17 +285,20 @@ class TransMsg:
         # find the related values in this acc_txns_package
         acc_package_hash = mTreePrf[0] # todo: [0] is the hash of acc package? or maybe [1]?
         # find related corresponding temporary package
+        add_this_mtree_prf_flag = False
         if acc_node.temp_sent_package != []:
-            related_values = [] # record related values
+            # related_values = [] # record related values
             for item in acc_node.temp_sent_package:
                 (acc_txns, acc_txns_package) = item
                 (acc_package_digest, acc_package_sig, acc_addr, acc_global_id) = acc_txns_package
                 if hash(acc_package_digest) == acc_package_hash:
-                    for acc_txn in acc_txns:
-                        related_values += acc_txn.get_values()
-            # record the recv mTree proof and some other info
-            acc_node.temp_recv_mTree_prf.append((mTreePrf, block_index, block_hash, related_values))
-        else:
+                    # this mTreePrf msg is need by self, thus add it.
+                    """for acc_txn in acc_txns:
+                        related_values += acc_txn.get_values()"""
+                    # record the recv mTree proof and some other info
+                    acc_node.temp_recv_mTree_prf.append((mTreePrf, block_index, block_hash))
+                    add_this_mtree_prf_flag = True
+        if not add_this_mtree_prf_flag:
             print_yellow('no corresponding temporary package, ignore this MTree proof msg.')
             pass
 
@@ -572,7 +575,7 @@ class TransMsg:
                     except:
                         raise ValueError('Add block fail!')
                     if longest_chain_flash_flag:
-                        acc_node.check_and_update_VPB_pairs()
+                        acc_node.update_and_check_VPB_pairs()
                     acc_node.send_package_flag += 0.5  # wait for vpb update, send_package_flag can be 1
                     print_green(
                         "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(

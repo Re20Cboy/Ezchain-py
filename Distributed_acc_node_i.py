@@ -193,17 +193,23 @@ class DstAcc:
                         recipes = acc_txn.Recipient
                         for one_value in value_lst:
                             costed_values_and_recipes.append((one_value, recipes))
-                    # update this VPB pair
-                    self.account.update_VPB_pairs_dst(mTreePrf, block_index, costed_values_and_recipes)
+                    # update this VPB pair,
+                    # and get the list of values which need to be sent to recipients
+                    # lst_value_need_sent = [2,4,5,8, ...] (the index of self VPB pairs),
+                    # lst_cost_value_recipient = [addr_1,addr_2,addr_1,addr_2, ...] (the addr of recipient of value need to be sent).
+                    lst_value_need_sent, lst_cost_value_recipient = self.account.update_VPB_pairs_dst(mTreePrf, block_index, costed_values_and_recipes, self.blockchain)
                 except Exception as e:
                     raise RuntimeError("An error occurred in acc_node.update_VPB_pairs_dst: " + str(e))
                 print('Update VPB pair success.')
                 # todo: check if this vpb need to be sent
                 #  AND this VPB can pass test
 
-
                 # send VPB pairs to recipient
-                recipient_addr, need_send_vpb_index = self.account.send_VPB_pairs_dst()
+                # recipient_addr = [recipient_1, recipient_2, ...],
+                # need_send_vpb_index = [[vpb_1_1, vpb_1_2, ...], [vpb_2_1, vpb_2_2, ...], ...],
+                # where vpb_i_j (j=1,2,...) will be sent to recipient_i.
+                recipient_addr, need_send_vpb_index = self.account.send_VPB_pairs_dst(
+                    lst_value_need_sent, lst_cost_value_recipient)
                 for index, item in enumerate(recipient_addr):
                     recipient_ip, recipient_port = self.trans_msg.find_neighbor_ip_and_port_via_addr(item)
                     need_send_vpb = []
@@ -213,6 +219,13 @@ class DstAcc:
                                   other_ip=recipient_ip)
                 # start send new package to txn pool
                 self.send_package_flag += 0.4
+            else:
+                # this recv mtree proof does not cover MAX_FORK_HEIGHT blocks,
+                # or not in the longest chain
+
+                # todo: acc should continue generate tnxs, and send to txn pool
+                #  do not wait for the confirm of pre txn.
+                pass
 
     def entry_point(self, Dst_acc):
         print('enrty point!')
