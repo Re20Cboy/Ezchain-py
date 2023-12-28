@@ -238,6 +238,9 @@ class TransMsg:
             # print_blue("Received TCP data: " + received_data)
             # msg_type = self.get_msg_type(received_data)
 
+            # the msg process is NOT parallel, if change to parallel,
+            # some parms need process Lock!
+            # todo: change msg process to be parallel, and add parm's Lock.
             if msg_type == "Hello":
                 self.tcp_hello_process(pure_msg)
             if msg_type == "MTreeProof":
@@ -557,10 +560,15 @@ class TransMsg:
             # logic of add block
             if my_type == "con": # con node
                 if con_node.con_node.check_block_sig(block, block.sig, miner_pk):
+                    # the block pass test of block sig
                     try:
                         longest_chain_flash_flag = my_local_chain.add_block(block)
+                        # the process of after adding new block (longest chain or not)
+                        # flash self txns pool due to new block body
+
                     except:
                         raise ValueError('Add block fail!')
+                    # this block flash the longest chain
                     if longest_chain_flash_flag:
                         con_node.recv_new_block_flag = 1
                     print_green(
@@ -609,8 +617,11 @@ class TransMsg:
 
 
     def acc_txns_package_msg_process(self, uuid, con_node, pure_msg):
-        if not con_node.txns_pool.check_is_repeated_package(pure_msg):
+        if not con_node.txns_pool.check_is_repeated_package(pure_msg, uuid):
             # add acc_txns_package to self txn pool
+            # todo: an acc node can send >1 packages to the txn pool
+            #  and con node index these packages due to arrival order
+
             con_node.txns_pool.add_acc_txns_package(pure_msg, uuid)
         else:
             print_yellow('Recv repeated package from ' + str(uuid))

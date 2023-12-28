@@ -7,24 +7,55 @@ import re
 
 class txnsPool:
     def __init__(self):
-        self.pool = [] # (accTxn's Digest, acc's sig for hash, acc's addr, acc's ID)
-        self.sender_id = []
+        self.pool = [] # [[(accTxn's Digest, acc's sig for hash, acc's addr, acc's ID), ...], ...]
+        self.sender_id = [] # list of acc nodes' uuid
 
     def freshPool(self, accounts, accTxns):
         for i in range(len(accTxns)):
             accTxns[i].sig_accTxn(accounts[i].privateKey) # 对accTxn进行签名
             self.pool.append(copy.deepcopy((accTxns[i].Digest, accTxns[i].Signature, accounts[i].addr, accounts[i].id)))
 
-    def add_acc_txns_package(self, acc_txns_package, uuid): # this func is designed for DST!
-        self.pool.append(acc_txns_package)
-        self.sender_id.append(uuid)
+    def add_acc_txns_package_dst(self, acc_txns_package, uuid): # this func is designed for DST!
+        # this func add the acc_txns_package & acc's uuid to self txns pool
+        # the txns pool's form is :
+        # self.sender_id = [uuid_1, uuid_2, uuid_3, ...]
+        # self.pool = [[package_1_1, package_1_2, ...],[package_2_1, package_2_2, ...],[...], ...],
+        # where package_i_j (j=1,2,3, ...) is sent by uuid_i.
+        if self.sender_id == []:
+            # no package recv, thus accept this package directly
+            self.pool.append([acc_txns_package])
+            self.sender_id.append(uuid)
+        else:
+            index_flag = None
+            for index, send_uuid in enumerate(self.sender_id):
+                if send_uuid == uuid:
+                    index_flag = index
+            if index_flag == None:
+                # this uuid is new
+                self.sender_id.append(uuid)
+                self.pool.append([acc_txns_package])
+            else:
+                self.pool[index_flag].append(acc_txns_package)
 
-    def check_is_repeated_package(self, acc_txns_package):
+    def get_packages_for_new_block_dst(self):
+        # this func return a list of packages, which are built for the new block body
+        lst_packages = []
+        for acc_packages in self.pool:
+            # pick the oldest package, since it wait for the longest time.
+            lst_packages.append(acc_packages[0])
+        return lst_packages
+
+    def check_is_repeated_package(self, acc_txns_package, uuid):
         if self.pool == []:
             return False
-        for item in self.pool: # acc_txns_package=(digest, sig, addr, global_id)
-            if item[2] == acc_txns_package[2]: # item[2] = addr
-                return True
+        index_of_uuid = None
+        for index, item in enumerate(self.sender_id):
+            if item == uuid:
+                index_of_uuid = index
+        if index_of_uuid != None:
+            for item in self.pool[index_of_uuid]: # item & acc_txns_package=(digest, sig, addr, global_id)
+                if item[0] == acc_txns_package[0]:
+                    return True
         return False
 
     def get_packages_num(self):
@@ -33,6 +64,40 @@ class txnsPool:
     def clearPool(self):
         self.pool = []
         self.sender_id = []
+
+    def clear_pool_dst(self, acc_digests):
+        # todo: this func should be re-write, since if new block mined by other con node,
+        #  self should delete the same package in local txns pool,
+        #  if self mine success, delete all package in the new block.
+
+        # del_lst shape as {1:[1,3,6], 2:[3,5], ...}, where
+        # 1:[1,3,6] means del self.pool[1][1], [1][3] and [1][6]
+        del_lst = {}
+        for acc_digest in acc_digests:
+            for index_1, acc_packages in enumerate(self.pool):
+                for index_2, acc_package in enumerate(acc_packages):
+                    if acc_package[0] == acc_digest:
+                        if index_1 in del_lst:
+                            del_lst[index_1].append(index_2)
+                        else:
+                            del_lst[index_1] = [index_2]
+
+        # reverse all del list, for correct delete
+        for key, value in del_lst.items():
+            del_lst[key] = reversed(value)
+
+        # del the package in the pool
+        for key, value in del_lst.items():
+            if value != []:
+                for del_index in value:
+                    del self.pool[key][del_index]
+
+    def print_tnxs_pool_dst(self):
+        # show the txns pool
+        for index, uuid in enumerate(self.sender_id):
+            print(str(uuid) + ': ')
+            print(self.pool[index])
+            print('-----------')
 
 class checkedVPBList:
     def __init__(self):

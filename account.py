@@ -42,8 +42,8 @@ class Account:
         self.accRoundVPBCostList = []  # Records the storage cost of VPB for this node each round
         self.accRoundCKCostList = []  # Records the storage cost of CK for this node each round
         self.accRoundAllCostList = []  # Records the total storage cost of VPB+CK for this node each round
-        self.delete_vpb_list = []
-
+        self.delete_vpb_list = []  # The list of values that need to be sent and deleted
+        self.unconfirmed_vpb_list = [] # The list of values whose txn has been sent to con node, but not be confirmed
 
     def test(self):
         test = copy.deepcopy(self.ValuePrfBlockPair)
@@ -172,6 +172,10 @@ class Account:
             value_Enough = False
             for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
                 value = VPBpair[0]
+                # check the value is costed (unconfirmed and confirmed)
+                if i in self.unconfirmed_vpb_list:
+                    continue
+                # check the values whether have been select in pre round txn
                 if value in [i[0] for i in self.costedValuesAndRecipes]:
                     continue
                 tmpCost += value.valueNum
@@ -276,6 +280,10 @@ class Account:
             value_Enough = False
             for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
                 value = VPBpair[0]
+                # check the value is costed (unconfirmed and confirmed)
+                if i in self.unconfirmed_vpb_list:
+                    continue
+                # check the values whether have been select in pre round txn
                 if value in [i[0] for i in self.costedValuesAndRecipes]:
                     continue
                 tmpCost += value.valueNum
@@ -379,6 +387,10 @@ class Account:
             value_Enough = False
             for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
                 value = VPBpair[0]
+                # check the value is costed (unconfirmed and confirmed)
+                if i in self.unconfirmed_vpb_list:
+                    continue
+                # check the values whether have been select in pre round txn
                 if value in [i[0] for i in self.costedValuesAndRecipes]:
                     continue
                 tmpCost += value.valueNum
@@ -981,8 +993,12 @@ class Account:
 
     def del_vpb_pair_dst(self):
         if self.delete_vpb_list != []:
+            # del self vpb pairs
             for index in self.delete_vpb_list:
                 self.delete_VPBpair(index)
+            # del the vpb's index in unconfirmed vpb lst
+            self.del_unconfirmed_vpb_list_dst(self.delete_vpb_list)
+            # flash the delete_vpb_list
             self.delete_vpb_list = []
 
     def send_VPB_pairs_dst(self, sent_vpb_index, recipient_addr):
@@ -996,11 +1012,31 @@ class Account:
                 del_value_index.append(index)
         # 将需要删除的位置按照降序排序，以免删除元素之后影响后续元素的索引
         del_value_index.sort(reverse=True)
-        self.delete_vpb_list = del_value_index # wait for send
+        self.delete_vpb_list += del_value_index # wait for send
         """for i in del_value_index:
             self.delete_VPBpair(i)"""
         (unique_recipients, new_vpb_index) = self.tool_for_send_VPB_pairs_dst(recipient_addr, sent_vpb_index)
         return unique_recipients, new_vpb_index
+
+    def find_vpb_index_via_acc_txns_dst(self, acc_txns):
+        # find the index of vpb pair for all values in the acc txns
+        value_in_vpb_index_lst = []
+        value_in_acc_txns_lst = []
+        for acc_txn in acc_txns:
+            value_in_acc_txns_lst += acc_txn.get_values()
+        for one_value in value_in_acc_txns_lst:
+            for index, one_vpb in enumerate(self.ValuePrfBlockPair):
+                vpb_value = one_vpb[0]
+                if one_value.isSameValue(vpb_value):
+                    value_in_vpb_index_lst.append(index)
+        return value_in_vpb_index_lst
+
+    def del_unconfirmed_vpb_list_dst(self, del_lst):
+        # del the confirmed vpb in the unconfirmed_vpb_list
+        return list(set(self.unconfirmed_vpb_list) - set(del_lst))
+
+    def add_unconfirmed_vpb_list_dst(self, add_lst):
+        self.unconfirmed_vpb_list += add_lst
 
     def clear_and_fresh_info_dst(self):
         self.accTxns = []

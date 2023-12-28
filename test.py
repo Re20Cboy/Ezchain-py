@@ -13,8 +13,8 @@ import unit
 import blockchain
 import random
 from account import Account
-
-from p2p_network import send_tcp_message 
+from p2p_network import send_tcp_message
+from unit import txnsPool
 
 class TestTcpDial(unittest.TestCase):
     @patch('p2p_network.socket.create_connection')
@@ -308,6 +308,33 @@ class TestAccount(unittest.TestCase):
         print('unique_recipients = ' + str(unique_recipients))
         print('new_vpb_index = ' + str(new_vpb_index))
 
+class TestTxnsPool(unittest.TestCase):
+    def test_add_acc_txns_package_dst(self):
+        txns_pool = txnsPool()
+        # generate random test_acc_txns_package_lst & test_uuid_lst
+        test_acc_txns_package_lst = [] # shape as [[('digest', 'sig', 'addr', 'id'), ...]]
+        test_uuid_lst = [12,22,32,65,89]
+        for index, item in enumerate(test_uuid_lst):
+            add_package_num = random.randint(0, 5)
+            tmp_add_lst = []
+            for _index in range(add_package_num):
+                tmp_add_lst.append(('digest_'+str(_index)+'_'+str(item),
+                                    'sig_'+str(_index)+'_'+str(item),
+                                    'addr_'+str(_index)+'_'+str(item),
+                                    'id_'+str(_index)+'_'+str(item)))
+            test_acc_txns_package_lst.append(tmp_add_lst)
+        for index, item in enumerate(test_uuid_lst):
+            for _item in test_acc_txns_package_lst[index]:
+                txns_pool.add_acc_txns_package_dst(_item, item)
+        txns_pool.print_tnxs_pool_dst()
+        return txns_pool
+
+    def test_clear_pool_dst(self):
+        txns_pool = self.test_add_acc_txns_package_dst()
+        print('//////////clear pool//////////')
+        acc_digests = ['digest_0_22', 'digest_1_65', 'digest_2_32']
+        txns_pool.clear_pool_dst(acc_digests)
+        txns_pool.print_tnxs_pool_dst()
 class TestUnit(unittest.TestCase):
     def test_unit_1(self):
         lst = [1,2,3,4,5]

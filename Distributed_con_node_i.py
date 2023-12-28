@@ -72,7 +72,7 @@ class DstConNode:
     def make_block_body(self):
         new_block_body = message.BlockBodyMsg()
         DigestAccTxns = []
-        for item in self.txns_pool.pool:
+        for item in self.txns_pool.get_packages_for_new_block():
             DigestAccTxns.append(item[0])
         new_block_body.random_generate_mTree(DigestAccTxns, self.txns_pool.pool)
         return new_block_body

@@ -201,8 +201,6 @@ class DstAcc:
                 except Exception as e:
                     raise RuntimeError("An error occurred in acc_node.update_VPB_pairs_dst: " + str(e))
                 print('Update VPB pair success.')
-                # todo: check if this vpb need to be sent
-                #  AND this VPB can pass test
 
                 # send VPB pairs to recipient
                 # recipient_addr = [recipient_1, recipient_2, ...],
