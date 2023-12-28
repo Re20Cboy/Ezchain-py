@@ -68,7 +68,7 @@ or
 ./Ezchain_simulate.py
 ```
 
-### Running simulation (DST)
+### Running simulation (DST, under development)
 
 #### Environment setup
 
