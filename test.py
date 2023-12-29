@@ -347,6 +347,16 @@ class TestTxnsPool(unittest.TestCase):
         after_del_txns_pool_flag = txns_pool.txns_pool_is_empty()
         print('after_del_txns_pool_flag = ' + str(after_del_txns_pool_flag))
 
+    def test_check_is_repeated_package(self):
+        txns_pool = self.test_add_acc_txns_package_dst()
+        empty_txns_pool = txnsPool()
+        acc_txns_package = ('digest_0_22', 'sig_0_22', 'addr_0_22', 'id_0_22')
+        uuid = 22
+        is_repeated_package = txns_pool.check_is_repeated_package(acc_txns_package, uuid)
+        print('is_repeated_package = ' + str(is_repeated_package))
+        empty_is_repeated_package = empty_txns_pool.check_is_repeated_package(acc_txns_package, uuid)
+        print('empty_is_repeated_package = ' + str(empty_is_repeated_package))
+
 class TestUnit(unittest.TestCase):
     def test_unit_1(self):
         lst = [1,2,3,4,5]

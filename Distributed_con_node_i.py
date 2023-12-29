@@ -77,7 +77,7 @@ class DstConNode:
             raise ValueError('ERR: empty txns pool!')
         for item in packages_for_new_block:
             DigestAccTxns.append(item[0])
-        new_block_body.random_generate_mTree(DigestAccTxns, self.txns_pool.pool)
+        new_block_body.random_generate_mTree(DigestAccTxns, packages_for_new_block)
         return new_block_body
 
     def monitor_txns_pool(self, max_packages = MAX_PACKAGES):

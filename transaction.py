@@ -100,6 +100,11 @@ class Transaction:
         signature = private_key.sign(data=digest, signature_algorithm=signature_algorithm)
         self.Signature = signature
 
+    def is_sent_to_self(self):
+        if self.Sender == self.Recipient:
+            return True
+        return False
+
     def check_txn_sig(self, load_public_key):
         # Load public key from the public key path
         public_key = load_pem_public_key(load_public_key)

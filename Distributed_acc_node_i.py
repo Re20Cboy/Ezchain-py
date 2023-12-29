@@ -182,8 +182,6 @@ class DstAcc:
                 value_in_vpb_index_lst = self.account.find_vpb_index_via_acc_txns_dst(acc_txns)
                 self.account.add_unconfirmed_vpb_list_dst(value_in_vpb_index_lst)"""
 
-
-
     def update_and_check_VPB_pairs(self):
         # 1.) longest chain flash, thus update self VPB pairs
         # 2.) after update, check which VPB can be sent

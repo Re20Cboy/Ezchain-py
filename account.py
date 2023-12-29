@@ -1019,11 +1019,15 @@ class Account:
         return unique_recipients, new_vpb_index
 
     def find_vpb_index_via_acc_txns_dst(self, acc_txns):
+        # this func find the values sent to con node but not be confirmed
         # find the index of vpb pair for all values in the acc txns
         value_in_vpb_index_lst = []
         value_in_acc_txns_lst = []
         for acc_txn in acc_txns:
-            value_in_acc_txns_lst += acc_txn.get_values()
+            if not acc_txn.is_sent_to_self():
+                # the value sent to self can be used in next round txn
+                # without confirm of the longest chain
+                value_in_acc_txns_lst += acc_txn.get_values()
         for one_value in value_in_acc_txns_lst:
             for index, one_vpb in enumerate(self.ValuePrfBlockPair):
                 vpb_value = one_vpb[0]

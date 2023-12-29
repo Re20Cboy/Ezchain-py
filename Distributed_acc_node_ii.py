@@ -1,3 +1,5 @@
+import time
+
 from account import Account
 from trans_msg_for_dts import TransMsg
 import threading
@@ -145,6 +147,24 @@ class DstAcc:
 
     def send_package_to_txn_pool(self):
         while True:
+            # generate transactions periodically and submit them to the trading pool
+            time.sleep(10) # generate txns / 10 sec
+            # generate txns
+            if RANDOM_TXNS:
+                acc_txns, acc_txns_package = self.random_generate_acc_txns_package()
+            else:
+                acc_txns, acc_txns_package = self.generate_acc_txns_package()
+            print("This round generate " + str(len(acc_txns)) + " txns.")
+            # send txns package to pool (brd to all con nodes)
+            self.trans_msg.brd_acc_txns_package_to_con_node(acc_txns_package)
+            self.account.accTxns = acc_txns
+            # record sent package
+            self.temp_sent_package.append((acc_txns, acc_txns_package))
+            # record sent but unconfirmed value
+            value_in_vpb_index_lst = self.account.find_vpb_index_via_acc_txns_dst(acc_txns)
+            self.account.add_unconfirmed_vpb_list_dst(value_in_vpb_index_lst)
+
+    """while True:
             if self.send_package_flag == 1:
                 # generate txns
                 if RANDOM_TXNS:
@@ -156,7 +176,11 @@ class DstAcc:
                 self.trans_msg.brd_acc_txns_package_to_con_node(acc_txns_package)
                 self.send_package_flag = 0
                 self.account.accTxns = acc_txns
+                # record sent package
                 self.temp_sent_package.append((acc_txns, acc_txns_package))
+                # record sent but unconfirmed value
+                value_in_vpb_index_lst = self.account.find_vpb_index_via_acc_txns_dst(acc_txns)
+                self.account.add_unconfirmed_vpb_list_dst(value_in_vpb_index_lst)"""
 
     def update_and_check_VPB_pairs(self):
         # 1.) longest chain flash, thus update self VPB pairs
@@ -201,6 +225,8 @@ class DstAcc:
                 except Exception as e:
                     raise RuntimeError("An error occurred in acc_node.update_VPB_pairs_dst: " + str(e))
                 print('Update VPB pair success.')
+                # todo: check if this vpb need to be sent
+                #  AND this VPB can pass test
 
                 # send VPB pairs to recipient
                 # recipient_addr = [recipient_1, recipient_2, ...],
@@ -217,6 +243,10 @@ class DstAcc:
                                   other_ip=recipient_ip)
                 # start send new package to txn pool
                 self.send_package_flag += 0.4
+            else:
+                # this recv mtree proof does not cover MAX_FORK_HEIGHT blocks,
+                # or not in the longest chain
+                pass
 
     def entry_point(self, Dst_acc):
         print('enrty point!')

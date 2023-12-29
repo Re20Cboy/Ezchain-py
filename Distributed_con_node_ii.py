@@ -72,16 +72,21 @@ class DstConNode:
     def make_block_body(self):
         new_block_body = message.BlockBodyMsg()
         DigestAccTxns = []
-        for item in self.txns_pool.pool:
+        packages_for_new_block = self.txns_pool.get_packages_for_new_block_dst()
+        if packages_for_new_block == []:
+            raise ValueError('ERR: empty txns pool!')
+        for item in packages_for_new_block:
             DigestAccTxns.append(item[0])
         new_block_body.random_generate_mTree(DigestAccTxns, self.txns_pool.pool)
         return new_block_body
 
     def monitor_txns_pool(self, max_packages = MAX_PACKAGES):
         while True:
+            # todo: re-write the logic of beginning mine
             if self.txns_pool.get_packages_num() >= max_packages:
                 self.mine()
-                self.txns_pool.clearPool()
+                # the flash of txns pool postponed to recving block
+                # self.txns_pool.clearPool()
 
     def mine(self):
         with self.mine_lock:
@@ -101,10 +106,13 @@ class DstConNode:
                     acc_sigs = new_block_body.get_acc_sigs()
                     acc_addrs = new_block_body.get_acc_addrs()
                     acc_digests = new_block_body.get_acc_digests()
+                    # generate the info for test, i.e., block body
                     new_block_info_4_brd = (new_block, m_tree, acc_digests, acc_sigs, acc_addrs)
-                    # brd new block with test info
+                    # brd new block with test info, i.e., block body
                     self.trans_msg.brd_block_to_neighbors(new_block_info_4_brd)
-
+                    # flash self txns pool
+                    self.txns_pool.clear_pool_dst(acc_digests)
+                    # set mine success flag
                     mine_success = True
                     # send mTree prf to all acc nodes
                     mTree = new_block_body.info
