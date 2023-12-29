@@ -565,7 +565,7 @@ class TransMsg:
                         longest_chain_flash_flag = my_local_chain.add_block(block)
                         # the process of after adding new block (longest chain or not)
                         # flash self txns pool due to new block body
-
+                        con_node.txns_pool.clear_pool_dst(acc_digests)
                     except:
                         raise ValueError('Add block fail!')
                     # this block flash the longest chain
@@ -619,10 +619,7 @@ class TransMsg:
     def acc_txns_package_msg_process(self, uuid, con_node, pure_msg):
         if not con_node.txns_pool.check_is_repeated_package(pure_msg, uuid):
             # add acc_txns_package to self txn pool
-            # todo: an acc node can send >1 packages to the txn pool
-            #  and con node index these packages due to arrival order
-
-            con_node.txns_pool.add_acc_txns_package(pure_msg, uuid)
+            con_node.txns_pool.add_acc_txns_package_dst(pure_msg, uuid)
         else:
             print_yellow('Recv repeated package from ' + str(uuid))
             pass

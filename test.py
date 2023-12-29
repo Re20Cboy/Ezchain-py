@@ -335,6 +335,18 @@ class TestTxnsPool(unittest.TestCase):
         acc_digests = ['digest_0_22', 'digest_1_65', 'digest_2_32']
         txns_pool.clear_pool_dst(acc_digests)
         txns_pool.print_tnxs_pool_dst()
+
+    def test_txns_pool_is_empty(self):
+        txns_pool = self.test_add_acc_txns_package_dst()
+        empty_txns_pool = txnsPool()
+        txns_pool_flag = txns_pool.txns_pool_is_empty()
+        empty_txns_pool_flag = empty_txns_pool.txns_pool_is_empty()
+        print('txns_pool_flag = ' + str(txns_pool_flag))
+        print('empty_txns_pool_flag = ' + str(empty_txns_pool_flag))
+        txns_pool.del_all_packages_in_pool()
+        after_del_txns_pool_flag = txns_pool.txns_pool_is_empty()
+        print('after_del_txns_pool_flag = ' + str(after_del_txns_pool_flag))
+
 class TestUnit(unittest.TestCase):
     def test_unit_1(self):
         lst = [1,2,3,4,5]
