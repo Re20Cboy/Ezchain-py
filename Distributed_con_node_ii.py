@@ -9,10 +9,28 @@ import transaction
 import copy
 from const import *
 import message
+import logging
+import sys
+
+# set log record
+logging.basicConfig(stream=sys.stdout, level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Create Threads Function
 def daemon_thread_builder(target, args=()) -> threading.Thread:
-    th = threading.Thread(target=target, args=args)
+    def target_with_info(*args):
+        thread_name = threading.current_thread().name
+        if PRINT_THREAD:
+            print(f"Starting thread for: {target.__name__} - {thread_name}")
+        try:
+            target(*args)
+        except Exception as e:
+            print(f"Thread {thread_name} encountered an exception: {e}")
+        finally:
+            if PRINT_THREAD:
+                print(f"Exiting thread: {thread_name}")
+
+    th = threading.Thread(target=target_with_info, args=args)
     th.setDaemon(True)
     return th
 
@@ -72,12 +90,19 @@ class DstConNode:
     def make_block_body(self):
         new_block_body = message.BlockBodyMsg()
         DigestAccTxns = []
-        packages_for_new_block = self.txns_pool.get_packages_for_new_block_dst()
-        if packages_for_new_block == []:
-            raise ValueError('ERR: empty txns pool!')
+        packages_for_new_block = []
+        show_one_pool_waits_txns_flag = True
+        while packages_for_new_block == []:
+            # this loop wait for new txns push in pool
+            packages_for_new_block = self.txns_pool.get_packages_for_new_block_dst()
+            if packages_for_new_block == [] and show_one_pool_waits_txns_flag:
+                print('Txn pool waits for new txns...')
+                show_one_pool_waits_txns_flag = False
+        # if packages_for_new_block == []:
+            # raise ValueError('ERR: empty txns pool!')
         for item in packages_for_new_block:
             DigestAccTxns.append(item[0])
-        new_block_body.random_generate_mTree(DigestAccTxns, self.txns_pool.pool)
+        new_block_body.random_generate_mTree(DigestAccTxns, packages_for_new_block)
         return new_block_body
 
     def monitor_txns_pool(self, max_packages = MAX_PACKAGES):
@@ -94,7 +119,11 @@ class DstConNode:
             print('Begin mine...')
             mine_success = False
             while self.recv_new_block_flag == 0:
-                time.sleep(ONE_HASH_TIME) # simulate one hash compute cost
+                # Generate normally distributed random numbers
+                # gauss random can avoid the same random of two process
+                random_time = random.gauss(ONE_HASH_TIME, ONE_HASH_TIME * 0.1)
+                time.sleep(random_time) # simulate one hash compute cost
+
                 if random.random() < ONE_HASH_SUCCESS_RATE: # success mine!
                     # make block body via acc txns packages
                     new_block_body = self.make_block_body()
@@ -122,9 +151,13 @@ class DstConNode:
                         acc_ip, acc_port = self.trans_msg.find_neighbor_ip_and_port_via_uuid(acc_neighbor_uuid)
                         if acc_port == None:
                             raise ValueError('Not find valid acc port!')
+                        # for de-bug
+                        if len(mTree.prfList) <= index:
+                            raise ValueError('test')
                         new_msg = (mTree.prfList[index], block_index, block_hash)
                         self.trans_msg.tcp_send(other_tcp_port=acc_port, data_to_send=new_msg, msg_type="MTreeProof",other_ip=acc_ip)
                     break # return this round mine
+
             if mine_success:
                 print('Mine success and brd new block to neighbors!')
             else:
@@ -138,6 +171,11 @@ class DstConNode:
             else:
                 return # out of wait
 
+    def awake(self):
+        # this func ensure that all process awake
+        while True:
+            time.sleep(5)
+
     def entry_point(self, Dst_con):
         # start listen to block (0-th is genesis block)
         self.wait_for_genesis_block()
@@ -148,31 +186,39 @@ class DstConNode:
 
 
     def init_point(self):
-        self.print_self_info()
-        # init (get all node's addr, uuid, ...)
-        # listen_hello thread listening hello brd msg from network
-        listen_brd = daemon_thread_builder(self.trans_msg.listen_brd, args=(self.con_node.addr, self.node_type, self.con_node.blockchain, self.con_node.publicKey, self, None, )) # msg_type='Hello'
-        # say hello to other nodes when init
-        self.trans_msg.brd_hello_to_neighbors(addr=self.con_node.addr, node_type=self.node_type, pk=self.con_node.publicKey) # say hello when init
-        # listen_p2p thread listening hello tcp msg from network
-        listen_p2p = daemon_thread_builder(self.trans_msg.tcp_receive)
-        # check con and acc node num
-        check_con_num = daemon_thread_builder(self.check_con_num)
-        check_acc_num = daemon_thread_builder(self.check_acc_num)
-        # check whether packages in txns pool reach the max line
-        monitor_txns_pool = daemon_thread_builder(self.monitor_txns_pool)
+        try:
+            self.print_self_info()
+            # init (get all node's addr, uuid, ...)
+            # listen_hello thread listening hello brd msg from network
+            listen_brd = daemon_thread_builder(self.trans_msg.listen_brd, args=(self.con_node.addr, self.node_type, self.con_node.blockchain, self.con_node.publicKey, self, None, )) # msg_type='Hello'
+            # say hello to other nodes when init
+            self.trans_msg.brd_hello_to_neighbors(addr=self.con_node.addr, node_type=self.node_type, pk=self.con_node.publicKey) # say hello when init
+            # listen_p2p thread listening hello tcp msg from network
+            listen_p2p = daemon_thread_builder(self.trans_msg.tcp_receive)
+            # check con and acc node num
+            check_con_num = daemon_thread_builder(self.check_con_num)
+            check_acc_num = daemon_thread_builder(self.check_acc_num)
+            # check whether packages in txns pool reach the max line
+            monitor_txns_pool = daemon_thread_builder(self.monitor_txns_pool)
+            # create a process which ensure to be awake
+            awake = daemon_thread_builder(self.awake)
 
-        listen_brd.start()
-        listen_p2p.start()
-        check_con_num.start()
-        check_acc_num.start()
-        monitor_txns_pool.start()
+            listen_brd.start()
+            listen_p2p.start()
+            check_con_num.start()
+            check_acc_num.start()
+            monitor_txns_pool.start()
+            awake.start()
 
-        listen_brd.join()
-        listen_p2p.join()
-        check_con_num.join()
-        check_acc_num.join()
-        monitor_txns_pool.join()
+            listen_brd.join()
+            listen_p2p.join()
+            check_con_num.join()
+            check_acc_num.join()
+            monitor_txns_pool.join()
+            awake.join()
+
+        except Exception as e:
+            logger.exception("ERR：{}".format(e))
 
 ############################################
 ############################################
@@ -181,6 +227,7 @@ def main():
     print("*" * 50)
     dst_node = DstConNode()
     dst_node.init_point()
+    print('test exit')
 
 if __name__ == "__main__":
     main()

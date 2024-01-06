@@ -1,8 +1,11 @@
 # Control random generate txns or not
 RANDOM_TXNS = True
 
+# The interval duration of transaction generation
+TXN_GENERATE_GAP_TIME = 5
+
 # Max fork height
-MAX_FORK_HEIGHT = 5 # bitcoin's max fork height = 6
+MAX_FORK_HEIGHT = 3 # bitcoin's max fork height = 6
 
 # Total number of transactions in the CSV file
 TNX_CSV_NUM = 300
@@ -18,19 +21,18 @@ ACC_ACC_DELAY = 1.5
 
 # Number of simulated nodes
 NODE_NUM = 5
-DST_NODE_NUM = 2
+DST_NODE_NUM = 1
 
 # Number of simulated accounts
 ACCOUNT_NUM = 5
-
 DST_ACC_NUM = 2
 
 # Number of max packages in con node's txns pool
 MAX_PACKAGES = 2
 
 # parm for dst mine
-ONE_HASH_TIME = 0.5
-ONE_HASH_SUCCESS_RATE = 0.01
+ONE_HASH_TIME = 0.3
+ONE_HASH_SUCCESS_RATE = 0.05
 
 # Number of transactions to package at once, theoretically should not exceed ACCOUNT_NUM^2 / 2
 # (/2 because at least ACCOUNT_NUM/2 accounts participate in transactions randomly)
@@ -71,3 +73,6 @@ ACCOUNT_PUBLIC_KEY_PATH = "account_public_key/"
 
 # compute time of one round hash
 D_ONE_HASH_TIME = 0.01
+
+# print the info of new thread
+PRINT_THREAD = False

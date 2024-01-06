@@ -73,7 +73,7 @@ class Block:
         return block_str # no sig_to_str !!!
 
     def block_to_short_str(self):
-        block_str = f"Index: {self.index}, Miner: {self.miner}, Pre Hash: {self.pre_hash}"
+        block_str = f"Index: {self.index}, Miner: {self.miner}"
         return block_str
 
     def block_to_pickle(self):

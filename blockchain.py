@@ -44,6 +44,15 @@ class Blockchain:
         fork_block.pre_block = pre_fork_block
         pre_fork_block.next_blocks.append(fork_block)
 
+    def get_latest_confirmed_block_index(self):
+        # get the index of latest confirmed block chain
+        latest_block_index = self.get_latest_block_index()
+        confirmed_latest_block_index = latest_block_index - MAX_FORK_HEIGHT + 1
+        if confirmed_latest_block_index > 0:
+            return confirmed_latest_block_index
+        # if no block has been confirmed, return None
+        return None
+
     def add_block(self, block):
         if not self.dst: # ez simulate mode
             self.chain.append(block)

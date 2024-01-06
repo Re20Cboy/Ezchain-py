@@ -856,16 +856,20 @@ class Account:
                 # find the first block index where self recv this value
                 start_index = latest_prf_index + 1
             latest_prf_index -= 1
+        if start_index == None:
+            # not find start_index, means that this value not be spent yet.
+            start_index = 0
         # check blockchain's bloom (include self addr?) within [blockchain.chain[VPBpair[2][start_index]], blockchain.chain[VPBpair[2][end_index]]]
         index = VPBpair[2][start_index]
         real_block_index = []
         while index <= VPBpair[2][end_index]:
             if self_addr in blockchain.chain[index].bloom:
                 real_block_index.append(index)
+            index += 1
         if real_block_index != block_index_lst[start_index: end_index + 1]:
             # blockchain's bloom does not match the block index list in VPBpair
             return False
-
+        return True
 
     def check_block_sig(self, block, signature, load_public_key):
         # 从公钥路径加载公钥
@@ -887,18 +891,19 @@ class Account:
         except:
             return False
 
-    def update_VPB_pairs_dst(self, mTree_proof, block_index, costed_values_and_recipes, blockchain):
+    def update_VPB_pairs_dst(self, mTree_proof, block_index, costed_values_and_recipes, related_acc_txns, blockchain):
         # this function update self VPB pair, and return the value index that need to be sent
         # *** the mTree_proof is immutable since it has experienced at least MAX_FORK_HEIGHT blocks
         sender = self.addr
         owner = sender
-        ownerAccTxnsList = self.accTxns
+        ownerAccTxnsList = related_acc_txns
         ownerMTreePrfList = mTree_proof
         costValueIndex = []  # record the VPB's index can be sent
         cost_value_recipient = [] # record the list of recipient of VPB (that will be sent).
         added_value_index = [] # record the VPB's index which have been added new VPB
 
         VList = [t[0] for t in self.ValuePrfBlockPair]
+
         # the value in costed lst should be processed specially
         for (costedV, recipient) in costed_values_and_recipes:
             # for all: values and recipients in this acc_txns_package
@@ -957,10 +962,12 @@ class Account:
     def add_one_VPB_dst(self, vbp_index, add_prfUnit, add_block_index):
         # add one VPB in DST mode
         # if success added, return True, otherwise, return False
+
         # find the position where this vpb should be added in the block index list
         block_index_lst = self.ValuePrfBlockPair[vbp_index][2]
         index = len(block_index_lst) - 1
         add_position = None
+        # Determine the add position based on the block index
         while index >= 0:
             if block_index_lst[index] == add_block_index:
                 # this block index has been added, so ignore this vpb
@@ -968,6 +975,7 @@ class Account:
             if block_index_lst[index] < add_block_index:
                 # this position should be added
                 add_position = index + 1
+            index -= 1
         if add_position == None:
             return False
         # add P & B to self VPB pairs

@@ -155,8 +155,6 @@ class EZsimulate:
         fixed_time = datetime(2022, 12, 31, 18, 30, 0)
         genesisBlock = block.Block(index=blockIndex, m_tree_root = m_tree_root, miner = GENESIS_MINER_ID, pre_hash = preBlockHash, time = fixed_time)
 
-        # 将创世块加入区块链中
-        # self.blockchain = blockchain.Blockchain(genesisBlock)
         # 生成每个创世块中的proof
         for count, acc in enumerate(Dst_accounts, start=0):
             tmpPrfUnit = unit.ProofUnit(owner=acc.addr, ownerAccTxnsList=GAccTxns.AccTxns ,ownerMTreePrfList=[genesisMTree.root.value])
@@ -164,6 +162,11 @@ class EZsimulate:
             tmpVPBPair = [genesisAccTxns[count].Value, tmpPrf, [genesisBlock.index]] # V-P-B对
             if type(acc) == account.Account: # dst acc only add its own vpb pair
                 acc.add_VPBpair(tmpVPBPair)
+
+        # add acc node to genesis block's bloom
+        for i in range(len(Dst_accounts)):
+            genesisBlock.add_item_to_bloom(item=Dst_accounts[i].addr)
+
         return genesisBlock
 
     def generate_block(self):

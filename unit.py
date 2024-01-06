@@ -190,6 +190,12 @@ class ProofUnit:  # 一个值在一个区块内的证明
         self.ownerAccTxnsList = ownerAccTxnsList  # 在此区块内的ownTxns
         self.ownerMTreePrfList = ownerMTreePrfList  # ownTxns对应的mTreePrf
 
+    def print_proof_unit(self):
+        ownerMTreePrfList_str = ''
+        for index, item in enumerate(self.ownerMTreePrfList):
+            ownerMTreePrfList_str += '  ' + str(index) + ': ' + str(item) + '\n'
+        print('owner: ' + str(self.owner) + '; ownerAccTxnsList: ' + str(self.ownerAccTxnsList))
+        print('ownerMTreePrfList: ' + '\n' + ownerMTreePrfList_str)
 
 class Proof:
     def __init__(self, prfList):
@@ -204,12 +210,22 @@ class Proof:
     def get_latest_prf_unit_owner_dst(self):
         return self.prfList[-1].owner
 
+    def print_proof(self):
+        for index, item in enumerate(self.prfList):
+            print('#'+str(index)+' prf_unit: ')
+            item.print_proof_unit()
+            print('--------------------')
+
 class Value:  # 针对VCB区块链的专门设计的值结构，总量2^259 = 16^65
     def __init__(self, beginIndex, valueNum):  # beginIndex是16进制str，valueNum是10进制int
         # 值的开始和结束index都包含在值内
         self.beginIndex = beginIndex
         self.valueNum = valueNum
         self.endIndex = self.getEndIndex(beginIndex, valueNum)
+
+    def print_value(self):
+        print('value #begin:' + str(self.beginIndex) + '; value #begin:' +
+              str(self.endIndex) + '; value num:' + str(self.valueNum))
 
     def get_decimal_beginIndex(self):
         return int(self.beginIndex, 16)
@@ -312,22 +328,28 @@ class MTreeProof:
                 return hashlib.sha256(val.encode("utf-8")).hexdigest()
             else:
                 return hashlib.sha256(val).hexdigest()
-
+        # check_flag is used for de-bug
+        check_flag = True
         hashedEncodeAccTxns = hash(accTxnsDigest)
 
         if hashedEncodeAccTxns != self.MTPrfList[0] and hashedEncodeAccTxns != self.MTPrfList[1]:
-            return False
+            check_flag = False
+            #return False
         if self.MTPrfList[-1] != trueRoot:
-            return False
+            check_flag = False
+            #return False
         lastHash = None
         for i in range(len(self.MTPrfList) // 2):
             lastHash = self.MTPrfList[2 * i + 2]
             if hash(self.MTPrfList[2 * i] + self.MTPrfList[2 * i + 1]) != lastHash and hash(
                     self.MTPrfList[2 * i + 1] + self.MTPrfList[2 * i]) != lastHash:
-                return False
+                check_flag = False
+                #return False
         if lastHash != self.MTPrfList[-1]:
-            return False
-        return True
+            check_flag = False
+            #return False
+        return check_flag
+        #return True
 
 
 class MerkleTreeNode:
