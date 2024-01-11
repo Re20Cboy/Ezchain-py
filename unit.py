@@ -126,20 +126,28 @@ class checkedVPBList:
     def __init__(self):
         self.VPBCheckPoints = []
 
-    def findCKviaVPB(self, VPB):  # 输入VPB，检测此VPB的V是否包含在checkpoint中，注意是“包含”关系
+    def findCKviaVPB(self, VPB):
+        # Input VPB and check if the V of this VPB is included in the checkpoint.
+        # Note that it should be an "inclusion" relationship (i.e., checkpoint includes this value).
+
+        # todo: re-write this func in dst mode, when fork appear, which need more blocks to confirm a txn.
+        #  the logic of find-ck should be re-build.
+
         value = VPB[0]
         returnList = []
         indexList = []
         if self.VPBCheckPoints != []:
             for index, ck in enumerate(self.VPBCheckPoints):
+                # un-package this vpb-ck
                 ckValue = ck[0]
                 ckOwner = ck[1]
                 ckBIndex = ck[2]
-                if ckValue.isInValue(value):  # 判断value是否被包含在ckValue中
+                # check inclusion relationship between ck and value
+                if ckValue.isInValue(value):
                     returnList.append((ckOwner, ckBIndex))
                     indexList.append(index)
             if len(returnList) > 1:
-                print("FIND len(returnList) > 1 !!!")
+                raise ValueError("more than 1 ck is found !!!")
         return returnList
 
     def addAndFreshCheckPoint(self, VPBPairs):

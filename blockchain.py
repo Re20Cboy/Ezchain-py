@@ -84,7 +84,11 @@ class Blockchain:
                     # flash flag
                     longest_chain_flash_flag = True
                 else: # new block NOT match the longest chain
-                    pre_fork_block = find_pre_block_traversal_fork_blocks(root=self.real_chain, block=block)
+                    print('may FORK...')
+                    try:
+                        pre_fork_block = find_pre_block_traversal_fork_blocks(root=self.real_chain, block=block)
+                    except Exception as e:
+                        print(f'ERR in find_pre_block_traversal_fork_blocks: {e}')
                     if pre_fork_block == None:
                         raise ValueError('NOT find pre fork block!')
                     # add fork block to fork chain
@@ -98,15 +102,17 @@ class Blockchain:
             return longest_chain_flash_flag
 
     def flash_longest_chain(self, entry_fork_block):
-        tmp_pre_block = entry_fork_block.pre_block.block
+        tmp_pre_block = entry_fork_block.pre_block
         block_lst_need_to_add = [entry_fork_block.block]
-        while tmp_pre_block not in self.chain:
-            block_lst_need_to_add.append(tmp_pre_block)
-            tmp_pre_block = tmp_pre_block.pre_block.block
+        while tmp_pre_block.block not in self.chain:
+            block_lst_need_to_add.append(tmp_pre_block.block)
+            tmp_pre_block = tmp_pre_block.pre_block
         # the unchanged latest block's index
-        unchanged_index = tmp_pre_block.get_index()
+        unchanged_index = tmp_pre_block.block.get_index()
         # cut longest chain
         self.chain = self.chain[:unchanged_index+1]
+        # reverse order of block_lst_need_to_add
+        block_lst_need_to_add.reverse()
         # add new chain part
         for new_block in block_lst_need_to_add:
             self.add_to_longest_chain(new_block)

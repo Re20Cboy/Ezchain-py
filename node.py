@@ -148,10 +148,10 @@ class Node:
             m_tree_root = self.tmpBlockBodyMsg.get_mTree_root_hash()
         miner = self.id
         block = Block(index = index, m_tree_root = m_tree_root, miner = miner, pre_hash = preBlockHash)
-        #设置正确的bloom
+        # set bloom
         for item in self.tmpBlockBodyMsg.info_Txns:
             block.bloom.add(item[2])
-        # 对区块进行签名
+        # sig the block
         sig = self.sig_block(block)
         block.sig = sig
         self.tmpBlockMsg = BlockMsg(block)

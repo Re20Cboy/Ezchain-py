@@ -187,7 +187,8 @@ class TransMsg:
         # msg_size = sys.getsizeof(msg)
 
         self.broadcaster_udp.sendto(compressed_msg, ('255.255.255.255', get_broadcast_port()))
-        print_blue("broadcast *" + msg_type + "* msg, size = " + str(sys.getsizeof(compressed_msg)) + " bytes.")
+        # print_blue("broadcast *" + msg_type + "* msg, size = " + str(sys.getsizeof(compressed_msg)) + " bytes.")
+        print_blue("broadcast *" + msg_type + "* msg")
         pass
 
     def brd_receive(self): # msg_type is str
@@ -270,20 +271,6 @@ class TransMsg:
 
 
     def tcp_hello_process(self, pure_msg):
-        """# define prefix
-        prefix =' Hello' + " MSG: "
-        # find prefix's index
-        prefix_index = received_data.find(prefix)
-        msg_info = received_data[(prefix_index + len(prefix)):]
-        prefix_info = received_data[:(prefix_index + len(prefix))]
-        parsed_msg = prefix_info.split(" ")
-        parsed_uuid = parsed_msg[1]
-        (uuid, port, addr, node_type) = self.decode_hello_msg(msg_info)
-        # print_blue("Recv this msg, add new neighbor...")
-        # process logic of recv hello msg:
-        new_neighbor = NeighborInfo(tcp_port=port, uuid=uuid, addr=addr, node_type=node_type)
-        self.add_neighbor(new_neighbor)"""
-
         (uuid, port, addr, node_type, pk, other_ip) = self.decode_hello_msg(pure_msg)
         # print_blue("Recv Hello msg, add new neighbor...")
         # process logic of recv hello msg:
@@ -327,53 +314,65 @@ class TransMsg:
                             str(len(acc_node.temp_recv_mTree_prf)) + ' prfs.')
 
     def tcp_VPBPair_process(self, pure_msg, acc_node, my_chain, uuid, other_ip, other_port):
-        with acc_node.account_lock:
-            # the logic of processing recved vpb pair
-            print_blue('recv VPB msg, testing...')
-            test_flag = True
-            for one_vpb in pure_msg:
-                v = one_vpb[0]
-                p = one_vpb[1]
-                b = one_vpb[2]
-                # sure that confirmed blocks can support the check of this vpb
-                vpb_required_block_index = b[-1]
-                while True:
-                    latest_confirmed_block_index = my_chain.get_latest_confirmed_block_index()
-                    if latest_confirmed_block_index == None:
-                        # no block has been confirmed, thus wait for vpb_required_block_index
-                        print('wait 1 sec for new confirmed block adding...')
-                        time.sleep(1) # wait 1 sec for recv more confirmed blocks
+        # print_blue('recv VPB msg')
+        # with acc_node.resource_lock:
+        # the logic of processing recved vpb pair
+        print_blue('recv VPB msg, testing...')
+        test_flag = True
+        for one_vpb in pure_msg:
+            v = one_vpb[0]
+            p = one_vpb[1]
+            b = one_vpb[2]
+            # sure that confirmed blocks can support the check of this vpb
+            vpb_required_block_index = b[-1]
+            while True:
+                latest_confirmed_block_index = my_chain.get_latest_confirmed_block_index()
+                if latest_confirmed_block_index == None:
+                    # no block has been confirmed, thus wait for vpb_required_block_index
+                    print('wait 1 sec for new confirmed block adding...')
+                    time.sleep(1) # wait 1 sec for recv more confirmed blocks
+                else:
+                    if latest_confirmed_block_index >= vpb_required_block_index:
+                        # confirmed blocks can support the check of vpb
+                        break
                     else:
-                        if latest_confirmed_block_index >= vpb_required_block_index:
-                            # confirmed blocks can support the check of vpb
-                            break
-                        else:
-                            print('wait 1 sec for new confirmed block adding...')
-                            time.sleep(1)  # wait 1 sec for recv more confirmed blocks
-                # for test
-                # acc_node.print_one_vpb(one_vpb)
+                        print('wait 1 sec for new confirmed block adding...')
+                        time.sleep(1)  # wait 1 sec for recv more confirmed blocks
+            # for test
+            # acc_node.print_one_vpb(one_vpb)
+            if not acc_node.account.check_VPBpair(VPBpair=one_vpb, bloomPrf=[], blockchain=my_chain):
+                test_flag = False
 
-                if not acc_node.account.check_VPBpair(VPBpair=one_vpb, bloomPrf=[], blockchain=my_chain):
-                    test_flag = False
             if test_flag:
                 # pass test, thus add this new VPB pairs
                 for one_vpb in pure_msg:
+                    try:
+                        # complete the vpb via local mtree proof lst.
+                        acc_node.complete_vpb_dst(one_vpb)
+                    except Exception as e:
+                        raise RuntimeError("ERR-vpb complete fail:" + str(e))
                     acc_node.account.add_VPBpair_dst(one_vpb)
                 print_green("Accept this value from " + str(uuid))
-                self.tcp_send(other_tcp_port=other_port, data_to_send="txn success!", msg_type="TxnTestResult", other_ip=other_ip)
+                self.tcp_send(other_tcp_port=other_port, data_to_send="txn success!",
+                            msg_type="TxnTestResult", other_ip=other_ip)
+
             else:
                 print_red("VPB test fail! reject this value from " + str(uuid))
-                self.tcp_send(other_tcp_port=other_port, data_to_send="txn fail!", msg_type="TxnTestResult", other_ip=other_ip)
+                self.tcp_send(other_tcp_port=other_port, data_to_send="txn fail!",
+                            msg_type="TxnTestResult", other_ip=other_ip)
 
     def tcp_txn_test_result_process(self, pure_msg, acc_node):
         if pure_msg == 'txn success!':
+            print_green('One txn has been confirmed!')
+            acc_node.clear_and_fresh_info_dst()
+        """if pure_msg == 'txn success!':
             acc_node.this_round_success_txns_num += 1
         if acc_node.this_round_success_txns_num >= acc_node.this_round_txns_num:
             print_green('All txns confirm! Entry next round.')
             # clear and flash self data
             acc_node.clear_and_fresh_info_dst()
             # start send new package to txn pool
-            acc_node.send_package_flag += 0.1
+            acc_node.send_package_flag += 0.1"""
 
     def tcp_send(self, other_tcp_port, data_to_send, msg_type, other_ip):
         """
@@ -398,8 +397,8 @@ class TransMsg:
         # address = (other_ip, int(other_tcp_port))
         # pickled_data = pickle.dumps(data_to_send)
         # print the size of compressed msg
-        print_blue("The size of tcp sent " + msg_type + " msg is " + str(sys.getsizeof(compressed_msg)) + " bytes.")
-
+        # print_blue("The size of tcp sent " + msg_type + " msg is " + str(sys.getsizeof(compressed_msg)) + " bytes.")
+        print_blue('TCP send *'+msg_type+'* msg.')
         SENDER.send(compressed_msg)
 
         SENDER.close()
@@ -452,12 +451,12 @@ class TransMsg:
                         block_msg_process.start()
                         block_msg_process.join()
                     elif self.node_type == "acc":
-                        with acc_node.blockchain_lock:
-                            self.block_msg_process(my_local_chain, my_type, uuid, pure_msg, None, acc_node)
-                        """block_msg_process = daemon_thread_builder(self.block_msg_process, args=(
+                        # with acc_node.resource_lock:
+                        # self.block_msg_process(my_local_chain, my_type, uuid, pure_msg, None, acc_node)
+                        block_msg_process = daemon_thread_builder(self.block_msg_process, args=(
                             my_local_chain, my_type, uuid, pure_msg, None, acc_node))
                         block_msg_process.start()
-                        block_msg_process.join()"""
+                        block_msg_process.join()
                 elif msg_type == 'AccTxnsPackage':
                     print_yellow('recv AccTxnsPackage brd msg.')
                     if self.node_type == "con": # con node process this msg, acc node ignore it.
@@ -598,6 +597,13 @@ class TransMsg:
                 else:
                     print('block sig illegal!')
             elif my_type == "acc": # acc node
+                while acc_node.block_process_lock:
+                    print('wait 1 sec for pre block process...')
+                    time.sleep(1)
+
+                # set the block process lock to True, LOCK the block process.
+                acc_node.set_block_process_lock_dst(boolean=True)
+
                 if acc_node.account.check_block_sig(block, block.sig, miner_pk):
                     try:
                         longest_chain_flash_flag = my_local_chain.add_block(block)
@@ -609,6 +615,9 @@ class TransMsg:
                     print_green(
                         "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
                             len(my_local_chain.chain)))
+
+                    # set the block process lock to False, UN-LOCK the block process.
+                    acc_node.set_block_process_lock_dst(boolean=False)
                 else:
                     print('block sig illegal!')
 

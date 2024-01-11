@@ -117,17 +117,21 @@ class DstConNode:
                 # self.txns_pool.clearPool()
 
     def mine(self):
-        with (self.mine_lock):
+        with ((self.mine_lock)):
             self.recv_new_block_flag = 0
             print('Begin mine...')
             mine_success = False
             while self.recv_new_block_flag == 0:
-                # Generate normally distributed random numbers
-                # gauss random can avoid the same random of two process
-                random_time = random.gauss(ONE_HASH_TIME, ONE_HASH_TIME * 0.1)
-                time.sleep(random_time) # simulate one hash compute cost
+                if not PERIOD_MODE: # mine-block mode
+                    # Generate normally distributed random numbers
+                    # gauss random can avoid the same random of two process
+                    random_time = random.gauss(ONE_HASH_TIME, ONE_HASH_TIME * 0.1)
+                    time.sleep(random_time) # simulate one hash compute cost
 
-                if random.random() < ONE_HASH_SUCCESS_RATE: # success mine!
+                if (((not PERIOD_MODE) and (random.random() < ONE_HASH_SUCCESS_RATE))
+                or PERIOD_MODE):
+                    if PERIOD_MODE: # periodic block generation mode
+                        time.sleep(PERIOD_SLEEP_TIME)
                     # make block body via acc txns packages
                     new_block_body, package_acc_lst = self.make_block_body()
                     self.con_node.tmpBlockBodyMsg = new_block_body

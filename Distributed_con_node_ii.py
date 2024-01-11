@@ -25,7 +25,7 @@ def daemon_thread_builder(target, args=()) -> threading.Thread:
         try:
             target(*args)
         except Exception as e:
-            print(f"Thread {thread_name} encountered an exception: {e}")
+            print(f"Thread ERR: {target.__name__} - {thread_name} encountered an exception: \n {e}")
         finally:
             if PRINT_THREAD:
                 print(f"Exiting thread: {thread_name}")
@@ -92,6 +92,8 @@ class DstConNode:
         DigestAccTxns = []
         packages_for_new_block = []
         show_one_pool_waits_txns_flag = True
+        package_acc_lst = [] # record the addr list of acc nodes included in this block_body
+
         while packages_for_new_block == []:
             # this loop wait for new txns push in pool
             packages_for_new_block = self.txns_pool.get_packages_for_new_block_dst()
@@ -102,8 +104,9 @@ class DstConNode:
             # raise ValueError('ERR: empty txns pool!')
         for item in packages_for_new_block:
             DigestAccTxns.append(item[0])
+            package_acc_lst.append(item[2])
         new_block_body.random_generate_mTree(DigestAccTxns, packages_for_new_block)
-        return new_block_body
+        return new_block_body, package_acc_lst
 
     def monitor_txns_pool(self, max_packages = MAX_PACKAGES):
         while True:
@@ -114,19 +117,23 @@ class DstConNode:
                 # self.txns_pool.clearPool()
 
     def mine(self):
-        with self.mine_lock:
+        with ((self.mine_lock)):
             self.recv_new_block_flag = 0
             print('Begin mine...')
             mine_success = False
             while self.recv_new_block_flag == 0:
-                # Generate normally distributed random numbers
-                # gauss random can avoid the same random of two process
-                random_time = random.gauss(ONE_HASH_TIME, ONE_HASH_TIME * 0.1)
-                time.sleep(random_time) # simulate one hash compute cost
+                if not PERIOD_MODE: # mine-block mode
+                    # Generate normally distributed random numbers
+                    # gauss random can avoid the same random of two process
+                    random_time = random.gauss(ONE_HASH_TIME, ONE_HASH_TIME * 0.1)
+                    time.sleep(random_time) # simulate one hash compute cost
 
-                if random.random() < ONE_HASH_SUCCESS_RATE: # success mine!
+                if (((not PERIOD_MODE) and (random.random() < ONE_HASH_SUCCESS_RATE))
+                or PERIOD_MODE):
+                    if PERIOD_MODE: # periodic block generation mode
+                        time.sleep(PERIOD_SLEEP_TIME)
                     # make block body via acc txns packages
-                    new_block_body = self.make_block_body()
+                    new_block_body, package_acc_lst = self.make_block_body()
                     self.con_node.tmpBlockBodyMsg = new_block_body
                     # make new block
                     new_block = self.con_node.create_new_block_for_dst()
@@ -147,8 +154,9 @@ class DstConNode:
                     mTree = new_block_body.info
                     block_index = new_block.index
                     block_hash = new_block.get_hash()
-                    for index, acc_neighbor_uuid in enumerate(self.txns_pool.sender_id, start=0):
-                        acc_ip, acc_port = self.trans_msg.find_neighbor_ip_and_port_via_uuid(acc_neighbor_uuid)
+
+                    for index, acc_addr in enumerate(package_acc_lst):
+                        acc_ip, acc_port = self.trans_msg.find_neighbor_ip_and_port_via_addr(acc_addr)
                         if acc_port == None:
                             raise ValueError('Not find valid acc port!')
                         # for de-bug
@@ -156,6 +164,18 @@ class DstConNode:
                             raise ValueError('test')
                         new_msg = (mTree.prfList[index], block_index, block_hash)
                         self.trans_msg.tcp_send(other_tcp_port=acc_port, data_to_send=new_msg, msg_type="MTreeProof",other_ip=acc_ip)
+
+                    # these code is used in 'all acc nodes packaged' mode
+                    '''for index, acc_neighbor_uuid in enumerate(self.txns_pool.sender_id, start=0):
+                        acc_ip, acc_port = self.trans_msg.find_neighbor_ip_and_port_via_uuid(acc_neighbor_uuid)
+                        if acc_port == None:
+                            raise ValueError('Not find valid acc port!')
+                        # for de-bug
+                        if len(mTree.prfList) <= index:
+                            raise ValueError('test')
+                        new_msg = (mTree.prfList[index], block_index, block_hash)
+                        self.trans_msg.tcp_send(other_tcp_port=acc_port, data_to_send=new_msg, msg_type="MTreeProof",other_ip=acc_ip)'''
+
                     break # return this round mine
 
             if mine_success:

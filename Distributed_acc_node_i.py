@@ -47,10 +47,22 @@ class DstAcc:
         self.temp_recv_mTree_prf = [] # temp storage recved (mTreePrf, block_index, block_hash) from miner
         self.temp_sent_package = [] # temp storage sent acc txn package, type as [(acc_txns, acc_txns_package), ...]
         # lock
+        self.resource_lock = threading.Lock()
         self.blockchain_lock = threading.Lock()
         self.temp_recv_mTree_prf_lock = threading.Lock()
         self.temp_sent_package_lock = threading.Lock()
         self.account_lock = threading.Lock()
+        # flag
+        # block_process_flag is a lock for all process after recv a new block, e.g.,
+        # 1.) recv new block & mtree proof pair;
+        # 2.) check and add block to local chain, check and add mtree proof pair to local;
+        # 3.) if main chain's len change (+ >1), update local VPB pair;
+        # 4.) if some VPB can be sent after update, send them to recipients.
+        # True means LOCK, and False means UN-LOCK
+        self.block_process_lock= False
+
+    def set_block_process_lock_dst(self, boolean):
+        self.block_process_lock = boolean
 
     def send_txns_to_txn_pool(self):
         pass
@@ -177,8 +189,11 @@ class DstAcc:
             # record sent package
             self.temp_sent_package.append((acc_txns, acc_txns_package))
             # record sent but unconfirmed value
-            value_in_vpb_index_lst = self.account.find_vpb_index_via_acc_txns_dst(acc_txns)
-            self.account.add_unconfirmed_vpb_list_dst(value_in_vpb_index_lst)
+            # NOTE: only record the value (# begin index, # end index),
+            # DO NOT record its index in the vpb pair, since vpb lst changes when del or accept vpb.
+            # func find_vpb_index_via_acc_txns_dst will check if the value is change, i.e, sent to self.
+            value_in_acc_txns_lst = self.account.find_value_in_acc_txns_dst(acc_txns)
+            self.account.add_unconfirmed_value_list_dst(value_in_acc_txns_lst)
 
         while True:
             # generate transactions periodically and submit them to the trading pool
@@ -263,6 +278,7 @@ class DstAcc:
             # check if this mTree_prf_pair is confirmed
             related_acc_txns = self.check_mTree_prf_pair(mTree_prf_pair)
             if related_acc_txns == False:
+                # print('this mTree_prf_pair does not match the condition of updating vpb')
                 # this mTree_prf_pair does not match the condition of updating vpb
                 continue
 
@@ -287,11 +303,18 @@ class DstAcc:
 
                 # in func update_VPB_pairs_dst, self vpb check is called,
                 # self vpb check ensure that no p&b is loss
-                lst_value_need_sent, lst_cost_value_recipient = self.account.update_VPB_pairs_dst(mTreePrf, block_index, costed_values_and_recipes, related_acc_txns, self.blockchain)
+                lst_value_need_sent, lst_cost_value_recipient = self.account.update_VPB_pairs_dst(
+                    mTree_prf_pair, mTreePrf, block_index, costed_values_and_recipes, related_acc_txns, self.blockchain)
             except Exception as e:
                 raise RuntimeError("An error occurred in acc_node.update_VPB_pairs_dst: " + str(e))
 
-            print('Update VPB pair success.')
+            # print('Update VPB pair success')
+            # for de-bug: print the info of lst_value_need_sent & lst_cost_value_recipient
+            '''print('lst of value need sent is:')
+            print(lst_value_need_sent)
+            print('lst of recipient is:')
+            print(lst_value_need_sent)'''
+
             # after vpb updating, the used mTree_prf_pair, which shapes as
             # (mTreePrf, block_index, block_hash), should be deleted.
 
@@ -316,17 +339,14 @@ class DstAcc:
                                         msg_type="VPBPair", other_ip=recipient_ip)
 
             # start send new package to txn pool
-            self.send_package_flag += 0.4
-        else:
-            # this recv mtree proof does not cover MAX_FORK_HEIGHT blocks,
-            # or not in the longest chain
-            pass
+            # self.send_package_flag += 0.4
 
         if del_lst_of_mTree_prf_pair != []:
             # [] means that no mTree_prf_pair is used for vpb updating
             # reverse del list for del process
             del_lst_of_mTree_prf_pair.reverse()
-            self.del_temp_recv_mTree_prf(del_lst_of_mTree_prf_pair)
+            # if use complete vpb, CANNOT del temp_recv_mTree_prf.
+            # self.del_temp_recv_mTree_prf(del_lst_of_mTree_prf_pair)
 
     # for test
     def print_one_vpb(self, one_vpb):
@@ -337,7 +357,6 @@ class DstAcc:
         v.print_value()
         p.print_proof()
         print('block_index: '+str(b))
-
 
     def del_temp_recv_mTree_prf(self, del_lst):
         # check del_list is reversed
@@ -352,6 +371,69 @@ class DstAcc:
         # del the item in the del lst
         for del_index in del_lst:
             del self.temp_recv_mTree_prf[del_index]
+
+    def complete_vpb_dst(self, uncompleted_vpb):
+        # un-package this uncompleted vpb
+        v = uncompleted_vpb[0]
+        p = uncompleted_vpb[1].prfList
+        b = uncompleted_vpb[2]
+
+        # define the missing range: (begin_block_index, end_block_index]
+        begin_block_index = b[-1] # in this block, the owner is changed to self
+        end_block_index = self.blockchain.get_latest_confirmed_block_index() # end index is the latest main chain block's index
+        if begin_block_index >= end_block_index:
+            # this vpb is no need for complete
+            return
+        # missing block index lst includes the block index & mtree proof should be added in the vpb
+        missing_block_index_lst = []
+
+        for index in range(begin_block_index+1, end_block_index+1):
+            # real range: (begin_block_index, end_block_index]
+            if self.account.addr in self.blockchain.chain[index].bloom:
+                # this block index & mtree proof should be added in the vpb
+                missing_block_index_lst.append(index)
+
+        # add the confirmed mtree proof to the uncompleted_vpb, and complete the vpb.
+        for mTree_prf_pair in self.temp_recv_mTree_prf:
+            # unpackage this mTree_prf_pair
+            (mTreePrf, block_index, block_hash) = mTree_prf_pair
+            # skip the mtree prf pair if not in missing lst
+            if block_index not in missing_block_index_lst:
+                continue
+            # check if this mTree_prf_pair is confirmed
+            related_acc_txns = self.check_mTree_prf_pair(mTree_prf_pair)
+            if related_acc_txns == False:
+                # this mTree_prf_pair does not match the condition of updating vpb:
+                # 1.) if block has been confirmed (used for updating vpb)?
+                # 2.) check block_index with block_hash, and find the corresponding block
+                # 3.) if corresponding block has been confirmed and within the longest chain?
+                # 4.) check the mTree proof
+                continue
+            owner = self.account.addr
+            # create missing proof unit
+            missing_proof_unit = unit.ProofUnit(owner=owner, ownerAccTxnsList=related_acc_txns,
+                                    ownerMTreePrfList=mTreePrf)
+            missing_block_index = block_index
+
+            # find the position where this vpb should be added in the block index list
+            index = len(b) - 1
+            add_position = None
+            # Determine the add position based on the block index
+            while index >= 0:
+                if b[index] == missing_block_index:
+                    # this block index has been added, so ignore this vpb
+                    break
+                if b[index] < missing_block_index:
+                    # this position should be added
+                    add_position = index + 1
+                    break
+                index -= 1
+            if add_position == None:
+                # not find the add position, thus skip to next mtree prf pair
+                continue
+            # add P & B to self VPB pairs
+            uncompleted_vpb[1].add_prf_unit_dst(prfUnit=missing_proof_unit, add_position=add_position)
+            uncompleted_vpb[2].insert(add_position, missing_block_index)
 
     def entry_point(self, Dst_acc):
         print('enrty point!')

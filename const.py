@@ -76,3 +76,7 @@ D_ONE_HASH_TIME = 0.01
 
 # print the info of new thread
 PRINT_THREAD = False
+
+# True = periodic block generation, False = mine-block mode
+PERIOD_MODE = False
+PERIOD_SLEEP_TIME = 10 # one block / PERIOD_SLEEP_TIME sec

@@ -43,7 +43,7 @@ class Account:
         self.accRoundCKCostList = []  # Records the storage cost of CK for this node each round
         self.accRoundAllCostList = []  # Records the total storage cost of VPB+CK for this node each round
         self.delete_vpb_list = []  # The list of values that need to be sent and deleted
-        self.unconfirmed_vpb_list = [] # The list of values whose txn has been sent to con node, but not be confirmed
+        self.unconfirmed_value_list = [] # The list of values whose txn has been sent to con node, but not be confirmed
 
     def test(self):
         test = copy.deepcopy(self.ValuePrfBlockPair)
@@ -173,7 +173,7 @@ class Account:
             for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
                 value = VPBpair[0]
                 # check the value is costed (unconfirmed and confirmed)
-                if i in self.unconfirmed_vpb_list:
+                if value in self.unconfirmed_value_list:
                     continue
                 # check the values whether have been select in pre round txn
                 if value in [i[0] for i in self.costedValuesAndRecipes]:
@@ -281,7 +281,8 @@ class Account:
             for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
                 value = VPBpair[0]
                 # check the value is costed (unconfirmed and confirmed)
-                if i in self.unconfirmed_vpb_list:
+                # todo: update unconfirmed_vpb_list to ensure that no change include in the list.
+                if value in self.unconfirmed_value_list:
                     continue
                 # check the values whether have been select in pre round txn
                 if value in [i[0] for i in self.costedValuesAndRecipes]:
@@ -388,7 +389,7 @@ class Account:
             for i, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
                 value = VPBpair[0]
                 # check the value is costed (unconfirmed and confirmed)
-                if i in self.unconfirmed_vpb_list:
+                if value in self.unconfirmed_value_list:
                     continue
                 # check the values whether have been select in pre round txn
                 if value in [i[0] for i in self.costedValuesAndRecipes]:
@@ -491,6 +492,8 @@ class Account:
             self.bloomPrf.append([copy.deepcopy(txnAccList), copy.deepcopy(blockIndex)])  # Bloom proof = [Addresses of all accounts in this bloom filter, block number to which this bloom belongs]
 
     def check_pass_VPBpair(self, VPBpair, bloomPrf, blockchain, passIndexList, CKOwner, check_start_time):  # Called when there is a checkpoint
+        print('enter ck check')
+
         value = VPBpair[0]
         valuePrf = VPBpair[1].prfList
         blockIndex = VPBpair[2]
@@ -505,6 +508,7 @@ class Account:
         ######## 3 Check the correctness of proof ###
         ##############################
         for index, prfUnit in enumerate(valuePrf, start=0):
+            print('ck-testing '+str(index)+' prf unit...')
             if index in passIndexList:
                 continue
 
@@ -566,7 +570,7 @@ class Account:
                         if txn.Sender != txn.Recipient:
                             print("VPB check error: This value should not be spent here in advance")
                             return False  # This value should not be spent here!
-
+        print('ck-pass vpb check #3 step')
         ##############################
         # 4 Check: The B information within each epoch matches the bloom filter information on the main chain, i.e., the epoch owner did not lie on B
         ##############################
@@ -626,6 +630,9 @@ class Account:
         VerTime = check_end_time - check_start_time
         self.verifyTimeCostList.append(VerTime)
         self.verifyStorageCostList.append(PrfSize)
+
+        print('ck-pass vpb check #4 step')
+
         return True
 
 
@@ -638,13 +645,14 @@ class Account:
             ckOwner, ckBIndex = ckList[0]
             flagIndex = None  # Indicates up to which position in VPB is recorded by CK
             for index, item in enumerate(VPBpair[2], start=0):
+                # check index
                 if item == ckBIndex[-1]:
                     flagIndex = index
             if flagIndex == None:
-                raise ValueError('VPB check error: Conflict between this VPB and checkpoint record!')
+                raise ValueError('VPB check point error: this ck NOT found in local vpb!')
             VPBOwner = VPBpair[1].prfList[flagIndex].owner
             if VPBOwner != ckOwner:
-                raise ValueError('VPB check error: Conflict between this VPB and checkpoint record!')
+                raise ValueError('VPB check point error: the owner of vpb NOT match this ck!')
             passIndexList = list(range(flagIndex + 1))
             CKOwner = ckOwner
 
@@ -652,7 +660,7 @@ class Account:
         PrfSize = (asizeof.asizeof(VPBpair) + asizeof.asizeof(bloomPrf)) * 8  # *8 to convert to bit unit
         # Record program start time
         check_start_time = time.time()
-
+        print('pass vpb check #0 step.')
         def hash(val):
             if type(val) == str:
                 return hashlib.sha256(val.encode("utf-8")).hexdigest()
@@ -674,6 +682,8 @@ class Account:
             print("VPB check error: Evidence and block index not one-to-one mapping")
             return False  # Evidence and block index not one-to-one mapping, hence error
 
+        print('pass vpb check #1 step.')
+
         ##############################
         ######## 2 Check the structural legality of value: ########
         ##############################
@@ -690,11 +700,13 @@ class Account:
         oneEpochBList = []  # Structure: [list of block index]
         epochChangeList = []  # Records the block number at the time of epoch change
 
+        print('pass vpb check #2 step.')
 
         ##############################
         ######## 3 Check the correctness of proof ###
         ##############################
         for index, prfUnit in enumerate(valuePrf, start=0):
+            print('testing ' + str(index) + ' prf unit...')
             # Since the first prfUnit is a transaction in the genesis block, it needs special verification
             if index == 0: # Indicates it's the genesis block
                 recordOwner = prfUnit.owner
@@ -774,6 +786,8 @@ class Account:
                                 print("VPB detection error: This value should not be prematurely spent here")
                                 return False # This value should not be spent here!
 
+        print('pass vpb check #3 step.')
+
         ##############################
         # 4 Check: The information of B in each epoch matches the bloom filter information on the main chain, i.e., the epoch's owner did not lie on B
         ##############################
@@ -810,6 +824,10 @@ class Account:
                 # If different, need to check bloom proof, to exclude the possibility of being "accidentally hit" by the bloom filter
                 if bloomPrf == []:
                     print("VPB detection error: No bloom proof provided")
+                    print('uncheckedBList is:')
+                    print(uncheckedBList)
+                    print('realEpochBlist is:')
+                    print(realEpochBlist)
                     return False  # No bloom proof provided, so no accidental hit, therefore, the owner's record of holding the value and the real record differ, error!
                 else:
                     # todo: Check bloom proof
@@ -822,7 +840,9 @@ class Account:
         VerTime = check_end_time - check_start_time
         self.verifyTimeCostList.append(VerTime)
         self.verifyStorageCostList.append(PrfSize)
-        
+
+        print('pass vpb check #4 (all) step.')
+
         return True
 
         def generate_txn_prf_when_use(self, begin_index, end_index): # begin_index, end_index respectively indicate the block number where this txn starts and ends in this account
@@ -891,7 +911,38 @@ class Account:
         except:
             return False
 
-    def update_VPB_pairs_dst(self, mTree_proof, block_index, costed_values_and_recipes, related_acc_txns, blockchain):
+    def check_repeat_pb(self, vpb_index, add_prf_unit, add_block_index):
+        # return 0, 1 or 2, which means:
+        # 0: not repeated p&b
+        # 1: repeated p&b
+        # 2: repeated b with different p
+        prf_lst = self.ValuePrfBlockPair[vpb_index][1].prfList
+        block_index_lst = self.ValuePrfBlockPair[vpb_index][2]
+        if len(prf_lst) == 0 or len(block_index_lst) == 0:
+            return 0
+        i = len(block_index_lst) - 1
+        while i >= 0:
+            if block_index_lst[i] == add_block_index:
+                if add_prf_unit.ownerMTreePrfList[-1] == prf_lst[i].ownerMTreePrfList[-1]:
+                    return 1
+                else:
+                    return 2
+            i -= 1
+        return 0
+
+    def add_one_vpb_for_costed_value_dst(self, vpb_index, add_prf_unit, add_block_index):
+        repeat_flag = self.check_repeat_pb(vpb_index, add_prf_unit, add_block_index)
+        if repeat_flag == 0: # not repeated p&b
+            # directly update this vpb via mtree prf
+            # update VPB pair (since this value will be sent, the vpb info should be added in the latest position)
+            self.ValuePrfBlockPair[vpb_index][1].add_prf_unit(add_prf_unit)
+            self.ValuePrfBlockPair[vpb_index][2].append(copy.deepcopy(add_block_index))
+        elif repeat_flag == 1:
+            print('update vpb check: repeated p&b.')
+        else:
+            print('update vpb check: repeated b with different p.')
+
+    def update_VPB_pairs_dst(self, mTree_prf_pair, mTree_proof, block_index, costed_values_and_recipes, related_acc_txns, blockchain):
         # this function update self VPB pair, and return the value index that need to be sent
         # *** the mTree_proof is immutable since it has experienced at least MAX_FORK_HEIGHT blocks
         sender = self.addr
@@ -913,14 +964,17 @@ class Account:
                     # create proof unit
                     prfUnit = unit.ProofUnit(owner=recipient, ownerAccTxnsList=ownerAccTxnsList,
                                              ownerMTreePrfList=ownerMTreePrfList)
-                    # update VPB pair (since this value will be sent, the vpb info should be added in the latest position)
-                    self.ValuePrfBlockPair[item][1].add_prf_unit(prfUnit)
-                    self.ValuePrfBlockPair[item][2].append(copy.deepcopy(block_index))
+
+                    self.add_one_vpb_for_costed_value_dst(vpb_index=item, add_prf_unit=prfUnit,
+                                                     add_block_index=block_index)
                     # test: if the value's block index is added repeatedly
-                    # the longest chain's record of value's block index CANNOT be repeated
+                    # 1.) the longest chain's record of value's block index CANNOT be repeated
+                    # 2.) the block index lst MUST be positive sequence.
                     test = self.ValuePrfBlockPair[item][2]
-                    if len(test) > 2 and test[-1] == test[-2]:
-                        raise ValueError("ERR: add VPB failed!")
+                    if len(test) > 1 and not all(test[i] < test[i + 1] for i in range(len(test) - 1)):
+                        print('Illegal block index lst (in costed lst):')
+                        print(test)
+                        raise ValueError("ERR: illegal block index lst")
                     # update added_value_index
                     added_value_index.append(item)
                     # check if this VPB can pass recipient's test
@@ -930,21 +984,30 @@ class Account:
                         costValueIndex.append(item)
                         cost_value_recipient.append(recipient)
                     else:
+                        print('Value still misses some proof, thus CANNOT send it (in costed lst).')
                         # this value is still missing some proof (due to distributed transfer delay or other reason)
                         pass
 
         # process the value not in costed lst
         for item, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
             if item not in added_value_index: # not the values that have been added
-                # NOT change the owner
+                # DO NOT change the owner
                 prfUnit = unit.ProofUnit(owner=owner, ownerAccTxnsList=ownerAccTxnsList,
                                          ownerMTreePrfList=ownerMTreePrfList)
+
                 # can not add vpb info directly, should confirm the added position
-                self.add_one_VPB_dst(vbp_index=item, add_prfUnit=prfUnit, add_block_index=block_index)
-                # test: if the value is added repeatedly
+                repeat_flag = self.check_repeat_pb(vpb_index=item, add_prf_unit=prfUnit, add_block_index=block_index)
+                if repeat_flag != 0: # repeated mtree prf
+                    continue
+                self.add_one_VPB_dst(vpb_index=item, add_prfUnit=prfUnit, add_block_index=block_index)
+                # test: if the value's block index is added repeatedly
+                # 1.) the longest chain's record of value's block index CANNOT be repeated
+                # 2.) the block index lst MUST be positive sequence.
                 test = self.ValuePrfBlockPair[item][2]
-                if len(test) > 2 and test[-1] == test[-2]:
-                    raise ValueError("ERR: add VPB failed!")
+                if len(test) > 1 and not all(test[i] < test[i + 1] for i in range(len(test) - 1)):
+                    print('Illegal block index lst (not in costed lst):')
+                    print(test)
+                    raise ValueError("ERR: illegal block index lst")
                 # check that if the VPB can be sent to recipient after update?
                 if owner != self.ValuePrfBlockPair[item][1].get_latest_prf_unit_owner_dst():
                     # latest owner is NOT self, thus this vpb should be sent to recipient
@@ -955,33 +1018,71 @@ class Account:
                         costValueIndex.append(item)
                         cost_value_recipient.append(self.ValuePrfBlockPair[item][1].get_latest_prf_unit_owner_dst())
                     else:
+                        print('Value still misses some proof, thus CANNOT send it (not in costed lst).')
                         # this value is still missing some proof (due to distributed transfer delay or other reason)
                         pass
         return costValueIndex, cost_value_recipient
 
-    def add_one_VPB_dst(self, vbp_index, add_prfUnit, add_block_index):
+    def add_one_VPB_dst(self, vpb_index, add_prfUnit, add_block_index):
         # add one VPB in DST mode
         # if success added, return True, otherwise, return False
 
-        # find the position where this vpb should be added in the block index list
-        block_index_lst = self.ValuePrfBlockPair[vbp_index][2]
-        index = len(block_index_lst) - 1
-        add_position = None
-        # Determine the add position based on the block index
-        while index >= 0:
-            if block_index_lst[index] == add_block_index:
-                # this block index has been added, so ignore this vpb
+        # un-package this vpb
+        v = self.ValuePrfBlockPair[vpb_index][0]
+        p = self.ValuePrfBlockPair[vpb_index][1].prfList
+        b = self.ValuePrfBlockPair[vpb_index][2]
+
+        # check if the vpb's curr owner is other:
+        if p[-1].owner != self.addr:
+            # define the add range:
+            # begin index: the first block index where self owner this value
+            # end index: the block index where self use(send) this value
+            owner_lst = [proof_unit.owner for proof_unit in p]
+            index_owner_lst = len(owner_lst) - 1
+            while index_owner_lst >=1 :
+                if owner_lst[index_owner_lst] == self.addr and owner_lst[index_owner_lst-1] != self.addr:
+                    break
+                index_owner_lst -= 1
+            begin_index = b[index_owner_lst] + 1
+            end_index = b[-1]
+            if begin_index >= end_index:
+                # no need to add proof unit
                 return False
-            if block_index_lst[index] < add_block_index:
-                # this position should be added
-                add_position = index + 1
-            index -= 1
-        if add_position == None:
-            return False
-        # add P & B to self VPB pairs
-        self.ValuePrfBlockPair[vbp_index][1].add_prf_unit_dst(prfUnit=add_prfUnit, add_position=add_position)
-        self.ValuePrfBlockPair[vbp_index][2].insert(add_position, add_block_index)
-        return True
+            add_range_block_index_lst = b[index_owner_lst+1:]
+            if add_block_index in add_range_block_index_lst:
+                # this proof unit has been added in the vpb, thus ignore
+                return False
+
+            add_range_lst = list(range(begin_index, end_index))
+            if add_block_index not in add_range_lst:
+                # this proof unit beyond the reasonable range of additions, thus ignore
+                return False
+            add_position = add_block_index
+            # add P & B to self VPB pairs
+            self.ValuePrfBlockPair[vpb_index][1].add_prf_unit_dst(prfUnit=add_prfUnit, add_position=add_position)
+            self.ValuePrfBlockPair[vpb_index][2].insert(add_position, add_block_index)
+            return True
+        # elif the vpb's curr owner is self:
+        else:
+            # find the position where this vpb should be added in the block index list
+            index = len(b) - 1
+            add_position = None
+            # Determine the add position based on the block index
+            while index >= 0:
+                if b[index] == add_block_index:
+                    # this block index has been added, so ignore this vpb
+                    return False
+                if b[index] < add_block_index:
+                    # this position should be added
+                    add_position = index + 1
+                    break
+                index -= 1
+            if add_position == None:
+                return False
+            # add P & B to self VPB pairs
+            self.ValuePrfBlockPair[vpb_index][1].add_prf_unit_dst(prfUnit=add_prfUnit, add_position=add_position)
+            self.ValuePrfBlockPair[vpb_index][2].insert(add_position, add_block_index)
+            return True
 
     def tool_for_send_VPB_pairs_dst(self, recipients, vpb_index):
         # make recipient and the values will be sent to him as:
@@ -1000,12 +1101,27 @@ class Account:
         return unique_recipients, new_vpb_index
 
     def del_vpb_pair_dst(self):
+        # unit to check if the lst is reversed
+        def is_reversed(lst):
+            if len(lst) <= 1:
+                return True
+            return all(lst[i] > lst[i+1] for i in range(len(lst)-1))
         if self.delete_vpb_list != []:
+            # check if the delete_vpb_list is reverse
+            if not is_reversed(self.delete_vpb_list):
+                print('ERR: the delete_vpb_list is not reversed: ')
+                print(self.delete_vpb_list)
+                # raise ValueError('the delete_vpb_list is not reversed!')
+            print('the delete_vpb_list is: ')
+            print(self.delete_vpb_list)
+            # record the value in the del vpb
+            delete_value_lst = []
             # del self vpb pairs
             for index in self.delete_vpb_list:
+                delete_value_lst.append(self.ValuePrfBlockPair[index][0])
                 self.delete_VPBpair(index)
-            # del the vpb's index in unconfirmed vpb lst
-            self.del_unconfirmed_vpb_list_dst(self.delete_vpb_list)
+            # del the values that have been confirmed
+            self.del_unconfirmed_value_list_dst(delete_value_lst)
             # flash the delete_vpb_list
             self.delete_vpb_list = []
 
@@ -1015,40 +1131,45 @@ class Account:
         # new_vpb_index = [[value_1_1, value_1_2, ...], [value_2_1, value_2_2, ...], ...],
         # where value_i_j (j=1,2,...) will be sent to recipient_i.
         del_value_index = copy.deepcopy(sent_vpb_index)  # Record the index of the value that needs to be deleted
-        for index, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
+        '''for index, VPBpair in enumerate(self.ValuePrfBlockPair, start=0):
             if index in sent_vpb_index:
-                del_value_index.append(index)
-        # 将需要删除的位置按照降序排序，以免删除元素之后影响后续元素的索引
+                del_value_index.append(index)'''
         del_value_index.sort(reverse=True)
-        self.delete_vpb_list += del_value_index # wait for send
+        # wait for sending vpb, then del the local vpb
+        self.delete_vpb_list += del_value_index
+        # Sort deletion elements in descending order for subsequent deletion operations
+        self.delete_vpb_list.sort(reverse=True)
         """for i in del_value_index:
             self.delete_VPBpair(i)"""
         (unique_recipients, new_vpb_index) = self.tool_for_send_VPB_pairs_dst(recipient_addr, sent_vpb_index)
         return unique_recipients, new_vpb_index
 
-    def find_vpb_index_via_acc_txns_dst(self, acc_txns):
+    def find_value_in_acc_txns_dst(self, acc_txns):
         # this func find the values sent to con node but not be confirmed
-        # find the index of vpb pair for all values in the acc txns
-        value_in_vpb_index_lst = []
+        # NOTE: only value self, not the value's index in the vpb pair
         value_in_acc_txns_lst = []
         for acc_txn in acc_txns:
             if not acc_txn.is_sent_to_self():
                 # the value sent to self can be used in next round txn
                 # without confirm of the longest chain
                 value_in_acc_txns_lst += acc_txn.get_values()
-        for one_value in value_in_acc_txns_lst:
-            for index, one_vpb in enumerate(self.ValuePrfBlockPair):
-                vpb_value = one_vpb[0]
-                if one_value.isSameValue(vpb_value):
-                    value_in_vpb_index_lst.append(index)
-        return value_in_vpb_index_lst
+        return value_in_acc_txns_lst
 
-    def del_unconfirmed_vpb_list_dst(self, del_lst):
+    def del_unconfirmed_value_list_dst(self, del_value_lst):
         # del the confirmed vpb in the unconfirmed_vpb_list
-        return list(set(self.unconfirmed_vpb_list) - set(del_lst))
+        del_value_index_lst = []
+        for index, value in enumerate(self.unconfirmed_value_list):
+            for del_value in del_value_lst:
+                if value.isSameValue(del_value):
+                    del_value_index_lst.append(index)
+        # reverse del lst to del unconfirmed values
+        del_value_index_lst.reverse()
+        # del the confirmed values
+        for index in del_value_index_lst:
+            del self.unconfirmed_value_list[index]
 
-    def add_unconfirmed_vpb_list_dst(self, add_lst):
-        self.unconfirmed_vpb_list += add_lst
+    def add_unconfirmed_value_list_dst(self, add_lst):
+        self.unconfirmed_value_list += add_lst
 
     def clear_and_fresh_info_dst(self):
         self.accTxns = []
@@ -1057,8 +1178,9 @@ class Account:
         self.recipientList = []
         # Check for duplicates in vpb of each round
         # self.test()
-        # Update check points based on this round's VPBpairs
+        # del confirmed vpb pair
         self.del_vpb_pair_dst()
+        # flash check point info base on VPBpairs
         self.VPBCheckPoints.addAndFreshCheckPoint(self.ValuePrfBlockPair)
         # Update storage cost information for acc
         self.freshStorageCost()

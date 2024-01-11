@@ -14,7 +14,7 @@ import blockchain
 import random
 from account import Account
 from p2p_network import send_tcp_message
-from unit import txnsPool
+from unit import txnsPool, Proof
 
 class TestTcpDial(unittest.TestCase):
     @patch('p2p_network.socket.create_connection')
@@ -241,9 +241,34 @@ class TestForkBlockchain(unittest.TestCase):
                     random_fork_chain_block_hash = new_block.get_hash()
                     # print('ans of hash: ' + str(random_fork_chain_block_hash))
         # print fork chain
-        # self.fork_bc.print_real_chain_dst(fork_block=self.fork_bc.real_chain)
+        self.fork_bc.print_real_chain_dst(fork_block=self.fork_bc.real_chain)
         # return generated fork chain
         return self.fork_bc, random_longest_chain_block_hash, random_fork_chain_block_hash, random_longest_flag, random_fork_flag_1, random_fork_flag_2
+
+    def test_longest_chain_change(self, main_block_num=10, add_position=8, add_fork_block_num=5):
+        # init main chain
+        for i in range(main_block_num):
+            new_index = self.fork_bc.get_latest_block_index() + 1
+            new_pre_hash = self.fork_bc.get_latest_block().get_hash()
+            # random generate a new block belong to main chain
+            # ***: miner='test_miner_'+str(i), where str(i) can avoid same block hash
+            new_block = Block(index=new_index, m_tree_root='test_merkel_tree_root', miner='test_miner_'+str(i),
+                              pre_hash=new_pre_hash)
+            self.fork_bc.add_block(new_block)
+        # add a fork can change longest chain
+        pre_block_hash = self.fork_bc.chain[add_position].get_hash()
+        for j in range(add_fork_block_num):
+            new_index = self.fork_bc.chain[add_position].get_index() + 1 + j
+            # ***: miner='test_miner_'+str(i)+str(j), where str(i) can avoid same block hash
+            new_block = Block(index=new_index, m_tree_root='test_merkel_tree_root',
+                              miner='test_miner_' + str(j),
+                              pre_hash=pre_block_hash)
+            pre_block_hash = new_block.get_hash()
+            self.fork_bc.add_block(new_block)
+        # print fork chain
+        self.fork_bc.print_real_chain_dst(fork_block=self.fork_bc.real_chain)
+        # print longest chain
+        self.fork_bc.print_chain()
 
     def test_add_fork_fork_block(self):
         pass
@@ -308,6 +333,27 @@ class TestAccount(unittest.TestCase):
         print('unique_recipients = ' + str(unique_recipients))
         print('new_vpb_index = ' + str(new_vpb_index))
 
+    def test_add_one_VPB_dst(self):
+        test_acc_node = Account(ID=0)
+        p = Proof([0,1])
+        curr_vpb = [[0],p,[0,1]]
+        test_acc_node.ValuePrfBlockPair.append(curr_vpb)
+        add_prfUnit=2
+        add_block_index=2
+        test_acc_node.add_one_VPB_dst(vpb_index=0, add_prfUnit=add_prfUnit,
+                                      add_block_index=add_block_index)
+        print('V:')
+        print(test_acc_node.ValuePrfBlockPair[0][0])
+        print('P:')
+        print(test_acc_node.ValuePrfBlockPair[0][1])
+        print('B:')
+        print(test_acc_node.ValuePrfBlockPair[0][2])
+
+        b = test_acc_node.ValuePrfBlockPair[0][2]
+        if len(b) > 1 and not all(b[i] < b[i + 1] for i in range(len(b) - 1)):
+            raise ValueError("ERR: illegal block index lst")
+
+
 class TestTxnsPool(unittest.TestCase):
     def test_add_acc_txns_package_dst(self):
         txns_pool = txnsPool()
@@ -360,9 +406,7 @@ class TestTxnsPool(unittest.TestCase):
 class TestUnit(unittest.TestCase):
     def test_unit_1(self):
         lst = [1,2,3,4,5]
-        add_position = 100
-        new_element = 'test'
-        lst.insert(add_position, new_element)
+        lst.sort(reverse=True)
         print(lst)
         pass
 
