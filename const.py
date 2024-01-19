@@ -2,7 +2,7 @@
 RANDOM_TXNS = True
 
 # The interval duration of transaction generation
-TXN_GENERATE_GAP_TIME = 5
+TXN_GENERATE_GAP_TIME = 20
 
 # Max fork height
 MAX_FORK_HEIGHT = 3 # bitcoin's max fork height = 6
@@ -21,7 +21,7 @@ ACC_ACC_DELAY = 1.5
 
 # Number of simulated nodes
 NODE_NUM = 5
-DST_NODE_NUM = 1
+DST_NODE_NUM = 2
 
 # Number of simulated accounts
 ACCOUNT_NUM = 5
@@ -31,8 +31,8 @@ DST_ACC_NUM = 2
 MAX_PACKAGES = 2
 
 # parm for dst mine
-ONE_HASH_TIME = 0.3
-ONE_HASH_SUCCESS_RATE = 0.05
+ONE_HASH_TIME = 0.5
+ONE_HASH_SUCCESS_RATE = 0.03
 
 # Number of transactions to package at once, theoretically should not exceed ACCOUNT_NUM^2 / 2
 # (/2 because at least ACCOUNT_NUM/2 accounts participate in transactions randomly)

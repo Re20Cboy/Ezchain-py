@@ -52,18 +52,28 @@ class DstAcc:
         self.temp_recv_mTree_prf_lock = threading.Lock()
         self.temp_sent_package_lock = threading.Lock()
         self.account_lock = threading.Lock()
-        # flag
-        # block_process_flag is a lock for all process after recv a new block, e.g.,
+        # lock
+        # block_process_lock is a lock for all process after recv a new block, e.g.,
         # 1.) recv new block & mtree proof pair;
         # 2.) check and add block to local chain, check and add mtree proof pair to local;
         # 3.) if main chain's len change (+ >1), update local VPB pair;
         # 4.) if some VPB can be sent after update, send them to recipients.
         # True means LOCK, and False means UN-LOCK
         self.block_process_lock= False
+        # generate_txns_lock is a lock for controlling all txns' generation process
+        # controlling the parms included in txns' generation process:
+        # 1.) unconfirmed value list
+        # 2.) costed value and recipient list
+        self.generate_txns_lock = False
+
+        self.vpb_lock = False
 
     def set_block_process_lock_dst(self, boolean):
         self.block_process_lock = boolean
-
+    def set_generate_txns_lock_dst(self, boolean):
+        self.generate_txns_lock = boolean
+    def set_vpb_lock_dst(self, boolean):
+        self.vpb_lock = boolean
     def send_txns_to_txn_pool(self):
         pass
     def generate_txns(self):
@@ -182,6 +192,7 @@ class DstAcc:
                 acc_txns, acc_txns_package = self.random_generate_acc_txns_package()
             else:
                 acc_txns, acc_txns_package = self.generate_acc_txns_package()
+
             print("This round generate " + str(len(acc_txns)) + " txns.")
             # send txns package to pool (brd to all con nodes)
             self.trans_msg.brd_acc_txns_package_to_con_node(acc_txns_package)
@@ -194,13 +205,23 @@ class DstAcc:
             # func find_vpb_index_via_acc_txns_dst will check if the value is change, i.e, sent to self.
             value_in_acc_txns_lst = self.account.find_value_in_acc_txns_dst(acc_txns)
             self.account.add_unconfirmed_value_list_dst(value_in_acc_txns_lst)
+            # update account's fresh_costed_value_and_recipes_dst
+            # the clear of costed_value_and_recipes should be after add_unconfirmed_value_list_dst
+            self.account.fresh_costed_value_and_recipes_dst()
 
         while True:
             # generate transactions periodically and submit them to the trading pool
-            time.sleep(TXN_GENERATE_GAP_TIME)
-            with self.blockchain_lock:
-                with self.account_lock:
-                    generate_txns_with_lock()
+            random_gap_time = random.uniform(1, TXN_GENERATE_GAP_TIME)
+            time.sleep(random_gap_time)
+
+            while self.vpb_lock:
+                # wait un-lock
+                print('generate_txns: wait 0.5 sec for un-lock of vpb lock...')
+                time.sleep(0.5)
+
+            self.set_vpb_lock_dst(True)
+            generate_txns_with_lock()
+            self.set_vpb_lock_dst(False)
 
     def check_mTree_prf_pair(self, mTree_prf_pair):
         # this func check the legal of mTree_prf_pair, which shapes as: (mTreePrf, block_index, block_hash)
@@ -216,7 +237,17 @@ class DstAcc:
         latest_confirmed_block_index = self.blockchain.get_latest_confirmed_block_index()
         if latest_confirmed_block_index == None:
             # no block has been confirmed, thus this mTree_prf_pair cannot be used for updating vpb
+            print('check_mTree_prf_pair: no block has been confirmed')
             return False
+        if block_index > latest_confirmed_block_index:
+            # this block has not been confirmed
+            print('check_mTree_prf_pair: this block has not been confirmed')
+            return False
+        if self.blockchain.check_block_hash_is_in_longest_chain(block_hash) == False:
+            # the block should be in the main (longest) chain
+            print('check_mTree_prf_pair: the block not in the main (longest) chain')
+            return False
+
         # check block_index with block_hash
         result_block = self.blockchain.find_block_via_block_hash_dst(block_hash)
 
@@ -224,15 +255,11 @@ class DstAcc:
         # 1.) result_block is not None; 2.) result_block's index is correct; 3.) this block has been confirmed
         if result_block == None:
             # not find block related to this mTree_prf_pair
+            print('check_mTree_prf_pair: not find block related to this mTree_prf_pair')
             return False
         if result_block.get_index() != block_index:
             # block_index and block_hash do not match
-            return False
-        if block_index > latest_confirmed_block_index:
-            # this block has not been confirmed
-            return False
-        if not self.blockchain.check_block_hash_is_in_longest_chain(block_hash):
-            # the block should be in the main (longest) chain
+            print('check_mTree_prf_pair: block_index and block_hash do not match')
             return False
 
         # check the mTree proof
@@ -241,12 +268,14 @@ class DstAcc:
         mTree_root = mTreePrf[-1]
         # check mTree_root
         if mTree_root != result_block.get_m_tree_root():
+            print('check_mTree_prf_pair: root err')
             return False
 
         # find costed_values_and_recipes via mTreePrf[0], i.e., acc_txns_package's hash
         result = self.find_acc_txns_via_package_hash(mTreePrf[0])
         if result == None:
             # this mTree proof has no corresponding local acc txns
+            print('check_mTree_prf_pair: this mTree proof has no corresponding local acc txns')
             return False
         (related_acc_txns, related_acc_txns_package) = result
         # get the acc txns' digest
@@ -254,6 +283,7 @@ class DstAcc:
 
         # check mTree_prd
         if not unchecked_mTree_prd.checkPrf(accTxnsDigest=acc_txns_digest, trueRoot=mTree_root):
+            print('check_mTree_prf_pair: not pass the check of mTree proof')
             return False
         # pass all check
         return related_acc_txns
@@ -273,12 +303,13 @@ class DstAcc:
         del_lst_of_mTree_prf_pair = []
         # scan every temp mtree proof
         for mTree_prf_pair_index, mTree_prf_pair in enumerate(self.temp_recv_mTree_prf):
-            # unpackage this mTree_prf_pair
+            print('VPB update: process #'+str(mTree_prf_pair_index)+' mTree_prf_pair.')
+            # un-package this mTree_prf_pair
             (mTreePrf, block_index, block_hash) = mTree_prf_pair
-            # check if this mTree_prf_pair is confirmed
+            # check the mtree prf is immutable
             related_acc_txns = self.check_mTree_prf_pair(mTree_prf_pair)
             if related_acc_txns == False:
-                # print('this mTree_prf_pair does not match the condition of updating vpb')
+                print('this mTree_prf_pair does not match the condition of updating vpb.')
                 # this mTree_prf_pair does not match the condition of updating vpb
                 continue
 
@@ -293,50 +324,74 @@ class DstAcc:
                 value_lst = acc_txn.get_values()
                 for one_value in value_lst:
                     costed_values_and_recipes.append((one_value, recipes))
+
             try:
                 # update this VPB pair,
                 # and get the list of values which need to be sent to recipients
                 # lst_value_need_sent = [2,4,5,8, ...] (the index of self VPB pairs),
                 # lst_cost_value_recipient = [addr_1,addr_2,addr_1,addr_2, ...] (the addr of recipient of value need to be sent).
-                # todo: before update vpb via mTree_prf_pair, ensure that:
-                #  mTreePrf is legal, and (mTreePrf, block_index) is added to the correct position in vpb pairs.
 
                 # in func update_VPB_pairs_dst, self vpb check is called,
                 # self vpb check ensure that no p&b is loss
+                print('Start update local vpb pair...')
                 lst_value_need_sent, lst_cost_value_recipient = self.account.update_VPB_pairs_dst(
                     mTree_prf_pair, mTreePrf, block_index, costed_values_and_recipes, related_acc_txns, self.blockchain)
             except Exception as e:
                 raise RuntimeError("An error occurred in acc_node.update_VPB_pairs_dst: " + str(e))
 
+
             # print('Update VPB pair success')
             # for de-bug: print the info of lst_value_need_sent & lst_cost_value_recipient
-            '''print('lst of value need sent is:')
+            '''print('costed_values_and_recipes:')
+            for item in costed_values_and_recipes:
+                (one_value, recipes) = item
+                one_value.print_value()
+                print(recipes)
+                print('--------------')
+            for one_value in [x[0] for x in self.account.ValuePrfBlockPair]:
+                print('-----self local value-----')
+                one_value.print_value()
+            print('lst of value need sent is:')
             print(lst_value_need_sent)
             print('lst of recipient is:')
-            print(lst_value_need_sent)'''
+            print(lst_cost_value_recipient)'''
 
-            # after vpb updating, the used mTree_prf_pair, which shapes as
-            # (mTreePrf, block_index, block_hash), should be deleted.
+            if lst_value_need_sent != [] and lst_cost_value_recipient != []: # some value need sent
+                print('costed_values_and_recipes:')
+                for item in costed_values_and_recipes:
+                    (one_value, recipes) = item
+                    one_value.print_value()
+                    print(recipes)
+                    print('--------------')
+                for one_value in [x[0] for x in self.account.ValuePrfBlockPair]:
+                    print('-----self local value-----')
+                    one_value.print_value()
+                print('lst of value need sent is:')
+                print(lst_value_need_sent)
+                print('lst of recipient is:')
+                print(lst_cost_value_recipient)
 
-            # record the del list of mTree_prf_pair
-            del_lst_of_mTree_prf_pair.append(mTree_prf_pair_index)
+                # after vpb updating, the used mTree_prf_pair, which shapes as
+                # (mTreePrf, block_index, block_hash), should be deleted.
+                # record the del list of mTree_prf_pair
+                del_lst_of_mTree_prf_pair.append(mTree_prf_pair_index)
 
-            # send VPB pairs to recipient
-            # recipient_addr = [recipient_1, recipient_2, ...],
-            # need_send_vpb_index = [[vpb_1_1, vpb_1_2, ...], [vpb_2_1, vpb_2_2, ...], ...],
-            # where vpb_i_j (j=1,2,...) will be sent to recipient_i.
-            recipient_addr, need_send_vpb_index = self.account.send_VPB_pairs_dst(
-                lst_value_need_sent, lst_cost_value_recipient)
+                # send VPB pairs to recipient
+                # recipient_addr = [recipient_1, recipient_2, ...],
+                # need_send_vpb_index = [[vpb_1_1, vpb_1_2, ...], [vpb_2_1, vpb_2_2, ...], ...],
+                # where vpb_i_j (j=1,2,...) will be sent to recipient_i.
+                recipient_addr, need_send_vpb_index = self.account.send_VPB_pairs_dst(
+                    lst_value_need_sent, lst_cost_value_recipient)
 
-            for index, item in enumerate(recipient_addr):
-                recipient_ip, recipient_port = self.trans_msg.find_neighbor_ip_and_port_via_addr(item)
-                need_send_vpb = []
-                for i in need_send_vpb_index[index]:
-                    need_send_vpb.append(self.account.ValuePrfBlockPair[i])
-                    # for test
-                    # self.print_one_vpb(self.account.ValuePrfBlockPair[i])
-                self.trans_msg.tcp_send(other_tcp_port=recipient_port, data_to_send=need_send_vpb,
-                                        msg_type="VPBPair", other_ip=recipient_ip)
+                for index, item in enumerate(recipient_addr):
+                    recipient_ip, recipient_port = self.trans_msg.find_neighbor_ip_and_port_via_addr(item)
+                    need_send_vpb = []
+                    for i in need_send_vpb_index[index]:
+                        need_send_vpb.append(self.account.ValuePrfBlockPair[i])
+                        # for test
+                        # self.print_one_vpb(self.account.ValuePrfBlockPair[i])
+                    self.trans_msg.tcp_send(other_tcp_port=recipient_port, data_to_send=need_send_vpb,
+                                            msg_type="VPBPair", other_ip=recipient_ip)
 
             # start send new package to txn pool
             # self.send_package_flag += 0.4
@@ -347,6 +402,26 @@ class DstAcc:
             del_lst_of_mTree_prf_pair.reverse()
             # if use complete vpb, CANNOT del temp_recv_mTree_prf.
             # self.del_temp_recv_mTree_prf(del_lst_of_mTree_prf_pair)
+
+        # del the sent VPB pair
+        # todo: del the vpb pair after recv the 'txn success' msg from the payee
+        #  note that: The deletion of VPB should be isolated from the next round
+        #  of VPB update operations
+        deleted_vpb_lst = self.account.del_vpb_pair_dst()
+        # update self check points base on self VPBpairs
+        if deleted_vpb_lst:
+            # process the deleted vpb, make them suitable for ck-check
+            '''for vpb in deleted_vpb_lst:
+                p = vpb[1].prfList
+                b = vpb[2]
+                del p[-1]
+                del b[-1]
+                # for test
+                if p[-1].owner != self.account.addr:
+                    print('ERR: vpb check point fresh fail!')'''
+            # self.account.VPBCheckPoints.fresh_local_vpb_check_point_dst(will_sent_vpb_pairs=deleted_vpb_lst)
+            pass
+
 
     # for test
     def print_one_vpb(self, one_vpb):
@@ -434,6 +509,14 @@ class DstAcc:
             # add P & B to self VPB pairs
             uncompleted_vpb[1].add_prf_unit_dst(prfUnit=missing_proof_unit, add_position=add_position)
             uncompleted_vpb[2].insert(add_position, missing_block_index)
+            # print for test
+            print('Complete vpb:')
+            print('add_position = ' + str(add_position))
+            print('missing_block_index = ' + str(missing_block_index))
+            print('missing_proof_unit:')
+            missing_proof_unit.print_proof_unit()
+
+
 
     def entry_point(self, Dst_acc):
         print('enrty point!')

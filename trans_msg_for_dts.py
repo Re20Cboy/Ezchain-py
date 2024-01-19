@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.serialization import load_pem_private_key, load_pem_public_key
 import hashlib
+from datetime import datetime
 
 ANSI_RESET = "\u001B[0m"
 ANSI_RED = "\u001B[31m"
@@ -25,19 +26,23 @@ _NODE_UUID = str(uuid.uuid4())[:8]
 
 
 def print_yellow(msg):
-    print(f"{ANSI_YELLOW}{msg}{ANSI_RESET}")
+    current_time = datetime.now()
+    print(f"{ANSI_YELLOW}{msg}{ANSI_RESET}", current_time)
 
 
 def print_blue(msg):
-    print(f"{ANSI_BLUE}{msg}{ANSI_RESET}")
+    current_time = datetime.now()
+    print(f"{ANSI_BLUE}{msg}{ANSI_RESET}", current_time)
 
 
 def print_red(msg):
-    print(f"{ANSI_RED}{msg}{ANSI_RESET}")
+    current_time = datetime.now()
+    print(f"{ANSI_RED}{msg}{ANSI_RESET}", current_time)
 
 
 def print_green(msg):
-    print(f"{ANSI_GREEN}{msg}{ANSI_RESET}")
+    current_time = datetime.now()
+    print(f"{ANSI_GREEN}{msg}{ANSI_RESET}", current_time)
 
 
 def get_broadcast_port():
@@ -254,17 +259,25 @@ class TransMsg:
             # the msg process is NOT parallel, if change to parallel,
             # some parms need process Lock!
             # todo: change msg process to be parallel, and add parm's Lock.
+            #  24-1-16: change msg process to be parallel: MTreeProof & VPBPair
             if msg_type == "Hello":
                 print_yellow('recv hello tcp msg.')
                 self.tcp_hello_process(pure_msg)
             if msg_type == "MTreeProof":
                 print_yellow('recv MTreeProof tcp msg.')
-                self.tcp_MTree_proof_process(pure_msg, acc_node)
+                tcp_MTree_proof_process = daemon_thread_builder(
+                    self.tcp_MTree_proof_process, args=(pure_msg, acc_node))
+                tcp_MTree_proof_process.start()
+                tcp_MTree_proof_process.join()
             if msg_type == "VPBPair":
                 print_yellow('recv VPBPair tcp msg.')
                 if sender_server_ip == None or sender_server_port == None:
                     raise ValueError('sender server ip and port NOT FIND!')
-                self.tcp_VPBPair_process(pure_msg, acc_node, my_chain, uuid, other_ip=sender_server_ip, other_port=sender_server_port)
+                tcp_VPBPair_process = daemon_thread_builder(
+                    self.tcp_VPBPair_process, args=(pure_msg, acc_node, my_chain, uuid,
+                                                    sender_server_ip, sender_server_port))
+                tcp_VPBPair_process.start()
+                tcp_VPBPair_process.join()
             if msg_type == "TxnTestResult":
                 print_yellow('recv TxnTestResult tcp msg.')
                 self.tcp_txn_test_result_process(pure_msg, acc_node)
@@ -288,10 +301,8 @@ class TransMsg:
         with acc_node.temp_recv_mTree_prf_lock:
             # update vpb (mTreePrf is the mtree proof in VPB, and block_index is the new block's index)
             (mTreePrf, block_index, block_hash) = pure_msg
-            # acc node should wait for MAX_FORK_HEIGHT blocks for unchanged longest chain
-            # todo: wait for MAX_FORK_HEIGHT blocks to del confirmed VPB pairs, and within [# push block, # confirm block] they are unavailable
             # find the related values in this acc_txns_package
-            acc_package_hash = mTreePrf[0] # todo: [0] is the hash of acc package? or maybe [1]?
+            acc_package_hash = mTreePrf[0]
             # find related corresponding temporary package
             add_this_mtree_prf_flag = False
             if acc_node.temp_sent_package != []:
@@ -314,52 +325,76 @@ class TransMsg:
                             str(len(acc_node.temp_recv_mTree_prf)) + ' prfs.')
 
     def tcp_VPBPair_process(self, pure_msg, acc_node, my_chain, uuid, other_ip, other_port):
+        # wait for new block if necessary
+        vpb_required_block_index = 0
+        for one_vpb in pure_msg:
+            b = one_vpb[2]
+            # sure that confirmed blocks can support the check of this vpb
+            if b[-1] > vpb_required_block_index:
+                vpb_required_block_index = b[-1]
+        while True:
+            latest_confirmed_block_index = my_chain.get_latest_confirmed_block_index()
+            if latest_confirmed_block_index == None:
+                # no block has been confirmed, thus wait for vpb_required_block_index
+                print('wait 1 sec for new confirmed block adding...')
+                time.sleep(1) # wait 1 sec for recv more confirmed blocks
+            else:
+                if latest_confirmed_block_index >= vpb_required_block_index:
+                    # confirmed blocks can support the check of vpb
+                    break
+                else:
+                    print('wait 1 sec for new confirmed block adding...')
+                    time.sleep(1)  # wait 1 sec for recv more confirmed blocks
+
+        while acc_node.vpb_lock:
+            # wait un-lock
+            print('tcp_VPBPair_process: wait 0.5 sec for un-lock of vpb_lock...')
+            time.sleep(0.5)
+
+        ### vpb LOCK ###
+        acc_node.set_vpb_lock_dst(True)
+
         # print_blue('recv VPB msg')
         # with acc_node.resource_lock:
         # the logic of processing recved vpb pair
         print_blue('recv VPB msg, testing...')
-        test_flag = True
-        for one_vpb in pure_msg:
-            v = one_vpb[0]
-            p = one_vpb[1]
-            b = one_vpb[2]
-            # sure that confirmed blocks can support the check of this vpb
-            vpb_required_block_index = b[-1]
-            while True:
-                latest_confirmed_block_index = my_chain.get_latest_confirmed_block_index()
-                if latest_confirmed_block_index == None:
-                    # no block has been confirmed, thus wait for vpb_required_block_index
-                    print('wait 1 sec for new confirmed block adding...')
-                    time.sleep(1) # wait 1 sec for recv more confirmed blocks
-                else:
-                    if latest_confirmed_block_index >= vpb_required_block_index:
-                        # confirmed blocks can support the check of vpb
-                        break
-                    else:
-                        print('wait 1 sec for new confirmed block adding...')
-                        time.sleep(1)  # wait 1 sec for recv more confirmed blocks
+
+        # check each vpb in the recv vpb pairs
+        test_flag = -1
+        # check each vpb in pure_msg
+        for index, one_vpb in enumerate(pure_msg):
             # for test
             # acc_node.print_one_vpb(one_vpb)
             if not acc_node.account.check_VPBpair(VPBpair=one_vpb, bloomPrf=[], blockchain=my_chain):
-                test_flag = False
+                test_flag = index
 
-            if test_flag:
-                # pass test, thus add this new VPB pairs
-                for one_vpb in pure_msg:
-                    try:
-                        # complete the vpb via local mtree proof lst.
-                        acc_node.complete_vpb_dst(one_vpb)
-                    except Exception as e:
-                        raise RuntimeError("ERR-vpb complete fail:" + str(e))
-                    acc_node.account.add_VPBpair_dst(one_vpb)
-                print_green("Accept this value from " + str(uuid))
-                self.tcp_send(other_tcp_port=other_port, data_to_send="txn success!",
-                            msg_type="TxnTestResult", other_ip=other_ip)
+        # process test result
+        if test_flag < 0:
+            # pass test, thus add this new VPB pairs
+            for one_vpb in pure_msg:
+                try:
+                    # complete the vpb via local mtree proof lst.
+                    acc_node.complete_vpb_dst(one_vpb)
+                except Exception as e:
+                    raise RuntimeError("ERR-vpb complete fail:" + str(e))
+                acc_node.account.add_VPBpair_dst(one_vpb)
+            print_green("Accept the value(s) from " + str(uuid))
+            # print new value(s) for test:
+            accepted_values_lst = [x[0] for x in pure_msg]
+            print_green('/////Accepted value list://///')
+            for one_v in accepted_values_lst:
+                one_v.print_value()
 
-            else:
-                print_red("VPB test fail! reject this value from " + str(uuid))
-                self.tcp_send(other_tcp_port=other_port, data_to_send="txn fail!",
-                            msg_type="TxnTestResult", other_ip=other_ip)
+            self.tcp_send(other_tcp_port=other_port, data_to_send="txn success!",
+                        msg_type="TxnTestResult", other_ip=other_ip)
+        else:
+            # vpb check fail (at least one vpb illegal)
+            print_red("VPB test fail! reject this value from " + str(uuid))
+            self.tcp_send(other_tcp_port=other_port, data_to_send="txn fail!",
+                        msg_type="TxnTestResult", other_ip=other_ip)
+
+        ### vpb UN-LOCK ###
+        acc_node.set_vpb_lock_dst(False)
 
     def tcp_txn_test_result_process(self, pure_msg, acc_node):
         if pure_msg == 'txn success!':
@@ -594,6 +629,7 @@ class TransMsg:
                     print_green(
                         "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
                             len(my_local_chain.chain)))
+                    my_local_chain.print_latest_block_hash_lst_dst()
                 else:
                     print('block sig illegal!')
             elif my_type == "acc": # acc node
@@ -610,12 +646,23 @@ class TransMsg:
                     except:
                         raise ValueError('Add block fail!')
                     if longest_chain_flash_flag:
+                        while acc_node.vpb_lock:
+                            # wait un-lock
+                            print('update_and_check_VPB_pairs: wait 0.5 sec for un-lock of vpb_lock...')
+                            time.sleep(0.5)
+
+                        ### vpb LOCK ###
+                        acc_node.set_vpb_lock_dst(True)
+                        # if the longest chain is changed, then update the vpb pairs.
                         acc_node.update_and_check_VPB_pairs()
+                        ### vpb UN-LOCK ###
+                        acc_node.set_vpb_lock_dst(False)
+
                     acc_node.send_package_flag += 0.5  # wait for vpb update, send_package_flag can be 1
                     print_green(
                         "Success add this block: " + block.block_to_short_str() + ", now my chain's len = " + str(
                             len(my_local_chain.chain)))
-
+                    my_local_chain.print_latest_block_hash_lst_dst()
                     # set the block process lock to False, UN-LOCK the block process.
                     acc_node.set_block_process_lock_dst(boolean=False)
                 else:

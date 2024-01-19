@@ -11,6 +11,7 @@ from const import *
 import message
 import logging
 import sys
+from datetime import datetime
 
 # set log record
 logging.basicConfig(stream=sys.stdout, level=logging.INFO)
@@ -119,7 +120,8 @@ class DstConNode:
     def mine(self):
         with ((self.mine_lock)):
             self.recv_new_block_flag = 0
-            print('Begin mine...')
+            current_time = datetime.now()
+            print('Begin mine... ', current_time)
             mine_success = False
             while self.recv_new_block_flag == 0:
                 if not PERIOD_MODE: # mine-block mode
@@ -179,7 +181,10 @@ class DstConNode:
                     break # return this round mine
 
             if mine_success:
-                print('Mine success and brd new block to neighbors!')
+                current_time = datetime.now()
+                print('Mine success and brd new block to neighbors! ', current_time)
+                print('now my chain\'s len = '+str(len(self.con_node.blockchain.chain)), current_time)
+                self.con_node.blockchain.print_latest_block_hash_lst_dst()
             else:
                 print('Recv new block, kill this mine().')
             return

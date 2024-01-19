@@ -53,6 +53,7 @@ class Blockchain:
         # if no block has been confirmed, return None
         return None
 
+
     def add_block(self, block):
         if not self.dst: # ez simulate mode
             self.chain.append(block)
@@ -202,3 +203,15 @@ class Blockchain:
         if fork_block.next_blocks != []:
             for next_fork_block in fork_block.next_blocks:
                 self.print_real_chain_dst(next_fork_block, indent + 2)
+
+    def print_longest_chain_hash_lst_dst(self):
+        # print the hash of block in the longest chain
+        print('-------------longest chain-------------')
+        for index, block in enumerate(self.chain):
+            print('block #'+str(index)+' : '+block.get_hash())
+        print('-------------longest chain-------------')
+
+    def print_latest_block_hash_lst_dst(self):
+        # print the hash of block in the longest chain
+        print('-------------latest block-------------')
+        print('block #'+str(self.get_latest_block_index())+' : '+self.get_latest_block_hash())

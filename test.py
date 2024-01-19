@@ -340,8 +340,8 @@ class TestAccount(unittest.TestCase):
         test_acc_node.ValuePrfBlockPair.append(curr_vpb)
         add_prfUnit=2
         add_block_index=2
-        test_acc_node.add_one_VPB_dst(vpb_index=0, add_prfUnit=add_prfUnit,
-                                      add_block_index=add_block_index)
+        test_acc_node.add_one_vpb_for_non_costed_value_dst(vpb_index=0, add_prfUnit=add_prfUnit,
+                                                           add_block_index=add_block_index)
         print('V:')
         print(test_acc_node.ValuePrfBlockPair[0][0])
         print('P:')

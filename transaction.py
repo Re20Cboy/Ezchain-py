@@ -88,6 +88,14 @@ class Transaction:
         txn_str += f"Time: {self.Time}\n"
         return txn_str
 
+    def print_txn_dst(self):
+        print('---------txn---------')
+        print(self)
+        print(self.txn2str())
+        for one_v in self.Value:
+            one_v.print_value()
+        print('---------txn end---------')
+
     def sig_txn(self, load_private_key):
         # Load private key from the private key path
         private_key = load_pem_private_key(load_private_key, password=None)

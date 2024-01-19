@@ -150,6 +150,51 @@ class checkedVPBList:
                 raise ValueError("more than 1 ck is found !!!")
         return returnList
 
+    def fresh_local_vpb_check_point_dst(self, will_sent_vpb_pairs):
+        for vpb in will_sent_vpb_pairs:
+            value = vpb[0]
+            valuePrf = vpb[1].prfList
+            blockIndex = vpb[2]
+            LatestPrfUnit = valuePrf[-1]
+            LatestOwner = LatestPrfUnit.owner
+
+            if self.VPBCheckPoints != []:
+                newVPBCP = [value, LatestOwner, blockIndex]
+                RestVPBCPs = None
+                delIndex = None
+                for index, VPBCP in enumerate(self.VPBCheckPoints, start=0):
+                    V = VPBCP[0]
+                    VOwner = VPBCP[1]
+                    BIndex = VPBCP[2]
+                    intersectValueReslut = V.getIntersectValue(value)
+                    if intersectValueReslut != None:
+                        # The value in the newly held VPB intersects with the original checkpoint (v)
+                        # and needs to be processed before adding a checkpoint
+                        if delIndex:
+                            raise ValueError('delIndex Err: There are multiple delIndices!')
+                        IntersectValue, RestValues = intersectValueReslut
+                        delIndex = index
+                        RestVPBCPs = []
+                        if RestValues != []:
+                            for item in RestValues:
+                                tmpRestVPBCP = [item, VOwner, BIndex]
+                                RestVPBCPs.append(tmpRestVPBCP)
+                        break
+                if RestVPBCPs != None:
+                    # If RestVPBCPs=[], it means that the entire value
+                    # needs to be updated without splitting the remaining parts
+                    self.VPBCheckPoints.append(copy.deepcopy(newVPBCP))
+                    for item in RestVPBCPs:
+                        self.VPBCheckPoints.append(copy.deepcopy(item))
+                    # Delete split check points
+                    del self.VPBCheckPoints[delIndex]
+                else:  # This value is completely "foreign", i.e., "first time seen".
+                    self.VPBCheckPoints.append(copy.deepcopy(newVPBCP))
+            else:  # Add the first batch of VPB checkpoints
+                VPBCP = [value, LatestOwner, blockIndex]
+                self.VPBCheckPoints.append(copy.deepcopy(VPBCP))
+
+
     def addAndFreshCheckPoint(self, VPBPairs):
         for VPB in VPBPairs:
             value = VPB[0]
@@ -232,8 +277,9 @@ class Value:  # 针对VCB区块链的专门设计的值结构，总量2^259 = 16
         self.endIndex = self.getEndIndex(beginIndex, valueNum)
 
     def print_value(self):
-        print('value #begin:' + str(self.beginIndex) + '; value #begin:' +
-              str(self.endIndex) + '; value num:' + str(self.valueNum))
+        print('value #begin:' + str(self.beginIndex))
+        print('value #end:' + str(self.endIndex))
+        print('value num:' + str(self.valueNum))
 
     def get_decimal_beginIndex(self):
         return int(self.beginIndex, 16)
@@ -319,6 +365,7 @@ class Value:  # 针对VCB区块链的专门设计的值结构，总量2^259 = 16
 
     def isSameValue(self, target):  # target是Value类型, 判断target是否就是本value
         if type(target) != Value:
+            print('ERR: func isSameValue get illegal input!')
             return False
         if target.beginIndex == self.beginIndex and target.endIndex == self.endIndex and target.valueNum == self.valueNum:
             return True
@@ -336,9 +383,17 @@ class MTreeProof:
                 return hashlib.sha256(val.encode("utf-8")).hexdigest()
             else:
                 return hashlib.sha256(val).hexdigest()
+
         # check_flag is used for de-bug
         check_flag = True
         hashedEncodeAccTxns = hash(accTxnsDigest)
+
+        if len(self.MTPrfList) == 1:
+            # this mTree proof only includes one acc_txn
+            if (hashedEncodeAccTxns != self.MTPrfList[0] or trueRoot != self.MTPrfList[0] or
+                    trueRoot != hashedEncodeAccTxns):
+                check_flag = False
+            return check_flag
 
         if hashedEncodeAccTxns != self.MTPrfList[0] and hashedEncodeAccTxns != self.MTPrfList[1]:
             check_flag = False
