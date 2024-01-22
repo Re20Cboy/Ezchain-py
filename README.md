@@ -24,7 +24,8 @@ Here is the [arXiv link](https://arxiv.org/abs/2312.00281). Cite this work by:
 * Efficient Transaction Confirmation: Strives to keep transaction confirmation delays within one minute.
 * Decentralization and Security: Maintains strict adherence to decentralization principles and ensures robust security​​.
 
-## Introduction to run
+## Get started
+
 This project provides two ways of initialization. The first method is designed to efficiently conduct experimental simulations, observe, and record various metrics of EZchain. All node scripts operate in a centralized manner to maximize the utilization of limited memory for simulating the operation of large-scale networks as much as possible. The second method closely resembles real distributed operation, where individual nodes run as processes with independent ports. Communication between nodes also utilizes UDP and TCP sockets. For convenience, we will refer to the first simulation as NON-DST (DST for distributed) and the second one as DST.
 
 ### Running simulation (NON-DST)
