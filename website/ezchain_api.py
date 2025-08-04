@@ -130,7 +130,7 @@ class EzchainWebAPI:
         accounts = []
         for acc in self.simulator.accounts:
             accounts.append({
-                'id': acc.ID,
+                'id': acc.id,
                 'address': acc.addr,
                 'balance': acc.balance,
                 'public_key': str(acc.publicKey)[:100] + '...' if acc.publicKey else '',
