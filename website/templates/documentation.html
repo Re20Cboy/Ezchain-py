@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="page-header">
+    <div class="container">
+        <h1>Documentation</h1>
+        <p>Get started with Ezchain - Complete guide to installation and usage</p>
+    </div>
+</section>
+
+<section class="documentation">
+    <div class="container">
+        <div class="doc-content">
+            <div class="doc-sidebar">
+                <h3>Quick Navigation</h3>
+                <ul>
+                    <li><a href="#installation">Installation</a></li>
+                    <li><a href="#configuration">Configuration</a></li>
+                    <li><a href="#non-dst">NON-DST Mode</a></li>
+                    <li><a href="#dst">DST Mode</a></li>
+                    <li><a href="#examples">Examples</a></li>
+                </ul>
+            </div>
+            
+            <div class="doc-main">
+                <section id="installation" class="doc-section">
+                    <h2>Installation</h2>
+                    <div class="code-block">
+                        <h3>Prerequisites</h3>
+                        <p>Python 3.8 or higher</p>
+                        <pre><code>git clone https://github.com/Re20Cboy/Ezchain-py.git
+cd Ezchain-py
+pip install -r requirements.txt</code></pre>
+                    </div>
+                </section>
+
+                <section id="configuration" class="doc-section">
+                    <h2>Configuration Options</h2>
+                    <p>Key configuration options can be modified in the <code>const.py</code> file:</p>
+                    <div class="config-grid">
+                        <div class="config-item">
+                            <h4>SAMPLE_NEIGHBORS_NUM</h4>
+                            <p>Controls the neighbors' number of each p2p node (include consensus and account)</p>
+                        </div>
+                        <div class="config-item">
+                            <h4>NODE_ACCOUNT_DELAY & ACC_ACC_DELAY</h4>
+                            <p>Control the delay of consensus node to account node and account node to account node</p>
+                        </div>
+                        <div class="config-item">
+                            <h4>NODE_NUM</h4>
+                            <p>Controls number of consensus nodes in NON-DST mode</p>
+                        </div>
+                        <div class="config-item">
+                            <h4>ACCOUNT_NUM</h4>
+                            <p>Controls number of account nodes in NON-DST mode</p>
+                        </div>
+                        <div class="config-item">
+                            <h4>PICK_TXNS_NUM</h4>
+                            <p>Controls the upper limit of transactions packaged at one round (block)</p>
+                        </div>
+                        <div class="config-item">
+                            <h4>SIMULATE_ROUND</h4>
+                            <p>Controls the mining round</p>
+                        </div>
+                        <div class="config-item">
+                            <h4>BANDWIDTH</h4>
+                            <p>Controls the network's bandwidth</p>
+                        </div>
+                        <div class="config-item">
+                            <h4>HASH_DIFFICULTY</h4>
+                            <p>Controls the mining difficulty</p>
+                        </div>
+                        <div class="config-item">
+                            <h4>HASH_POWER</h4>
+                            <p>Controls the hash computing power per second</p>
+                        </div>
+                    </div>
+                </section>
+
+                <section id="non-dst" class="doc-section">
+                    <h2>Running Simulation (NON-DST Mode)</h2>
+                    <p>The NON-DST mode is designed for efficient experimental simulations, observing and recording various metrics of EZchain. All node scripts operate in a centralized manner to maximize the utilization of limited memory.</p>
+                    <div class="code-block">
+                        <h3>Run Command</h3>
+                        <pre><code>python3 Ezchain_simulate.py</code></pre>
+                        <p>or</p>
+                        <pre><code>./Ezchain_simulate.py</code></pre>
+                    </div>
+                </section>
+
+                <section id="dst" class="doc-section">
+                    <h2>Running Simulation (DST Mode)</h2>
+                    <p>The DST mode closely resembles real distributed operation, where individual nodes run as processes with independent ports. Communication between nodes utilizes UDP and TCP sockets.</p>
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle"></i>
+                        <strong>Note:</strong> DST mode is currently under development
+                    </div>
+                    <div class="code-block">
+                        <h3>DST-specific Configuration</h3>
+                        <div class="config-grid">
+                            <div class="config-item">
+                                <h4>DST_NODE_NUM</h4>
+                                <p>Controls number of consensus nodes in DST mode</p>
+                            </div>
+                            <div class="config-item">
+                                <h4>DST_ACC_NUM</h4>
+                                <p>Controls number of account nodes in DST mode</p>
+                            </div>
+                            <div class="config-item">
+                                <h4>MAX_PACKAGES</h4>
+                                <p>Threshold for collective packaging into blocks</p>
+                            </div>
+                            <div class="config-item">
+                                <h4>ONE_HASH_TIME</h4>
+                                <p>Time consumed by one hash calculation</p>
+                            </div>
+                            <div class="config-item">
+                                <h4>ONE_HASH_SUCCESS_RATE</h4>
+                                <p>Probability of successful hash calculation (mining difficulty)</p>
+                            </div>
+                        </div>
+                        <h3>Run Command</h3>
+                        <pre><code>python3 DST_ENTRY_POINT.py</code></pre>
+                        <p>or</p>
+                        <pre><code>./DST_ENTRY_POINT.py</code></pre>
+                    </div>
+                </section>
+
+                <section id="examples" class="doc-section">
+                    <h2>Usage Examples</h2>
+                    <div class="example-grid">
+                        <div class="example-card">
+                            <h3>Basic Simulation</h3>
+                            <p>Run a basic simulation with default parameters to observe EZchain's performance metrics.</p>
+                            <pre><code># Basic simulation
+python3 Ezchain_simulate.py</code></pre>
+                        </div>
+                        <div class="example-card">
+                            <h3>Custom Configuration</h3>
+                            <p>Modify configuration parameters in const.py to test different scenarios.</p>
+                            <pre><code># Edit const.py for custom settings
+NODE_NUM = 10
+ACCOUNT_NUM = 50
+BANDWIDTH = 1000
+SIMULATE_ROUND = 100</code></pre>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}

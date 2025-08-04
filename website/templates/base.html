@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ezchain - Decentralized Scale-out Blockchain Ledger System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <h2>Ezchain</h2>
+            </div>
+            <ul class="nav-menu">
+                <li><a href="/" class="nav-link">Home</a></li>
+                <li><a href="/blockchain" class="nav-link">区块链可视化</a></li>
+                <li><a href="/features" class="nav-link">Features</a></li>
+                <li><a href="/documentation" class="nav-link">Documentation</a></li>
+                <li><a href="/about" class="nav-link">About</a></li>
+            </ul>
+            <div class="nav-toggle">
+                <i class="fas fa-bars"></i>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>Ezchain</h3>
+                    <p>A decentralized scale-out blockchain ledger system for Web3.0</p>
+                </div>
+                <div class="footer-section">
+                    <h3>Quick Links</h3>
+                    <ul>
+                        <li><a href="/">Home</a></li>
+                        <li><a href="/features">Features</a></li>
+                        <li><a href="/documentation">Documentation</a></li>
+                        <li><a href="/about">About</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h3>Resources</h3>
+                    <ul>
+                        <li><a href="https://github.com/Re20Cboy/Ezchain-py" target="_blank">GitHub</a></li>
+                        <li><a href="https://arxiv.org/abs/2312.00281" target="_blank">arXiv Paper</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 Ezchain. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

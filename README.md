@@ -1,12 +1,25 @@
-# Ezchain-A DECENTRALIZED SCALE-OUT BLOCKCHAIN LEDGER SYSTEM FOR WEB3.0
+# Ezchain - A Decentralized Scale-out Blockchain Ledger System for Web3.0
 
-The development of underlying technologies in blockchain mostly revolves around a difficult problem: how to enhance the performance of the system and reduce various costs of nodes (such as communication, storage and verification) without compromising the system's security and decentralization. Various layer-1 and layer-2 protocols have provided excellent solutions for this challenge. However, they cannot yet be considered as a "silver bullet". This paper proposes EZchain---a novel decentralized "scale-out" ledger system designed for web3.0, aiming to enable blockchain technology to truly support ledger applications in large-scale fully decentralized networks. Without compromising security and decentralization, EZchain successfully accomplishes the following milestones: 1) Scalability: The theoretical throughput of EZchain can be infinitely expanded, nearly unaffected by bandwidth and other resource constraints. 2) Consumer-Grade Hardware Compatibility: EZchain is designed to be compatible with consumer-grade hardware, supporting storage, computation, and verification requirements. 3) Efficient Transaction Confirmation: EZchain strives to maintain transaction confirmation delays within one minute.
-Our prototype experiment demonstrates that under typical daily bandwidth network conditions, EZchain's performance in all aspects approaches that of the accounts in centralized payment systems. This provides a solid infrastructure for realizing mobile payments in web3.0.
+[![arXiv](https://img.shields.io/badge/arXiv-2312.00281-b31b1b.svg)](https://arxiv.org/abs/2312.00281)
+[![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-## arXiv: 
+Ezchain is a novel decentralized "scale-out" ledger system designed for Web3.0 that enables blockchain technology to support ledger applications in large-scale fully decentralized networks without compromising security and decentralization.
 
-Here is the [arXiv link](https://arxiv.org/abs/2312.00281). Cite this work by:
-```
+## 🌟 Key Features
+
+- **🚀 Scalability**: System throughput is directly proportional to node size, not constrained by bandwidth resources
+- **💻 Hardware Compatibility**: Designed for consumer-grade hardware, supporting storage, computation, and verification requirements
+- **⚡ Efficient Transaction Confirmation**: Maintains transaction confirmation delays within one minute
+- **🔐 Decentralization and Security**: Strict adherence to decentralization principles with robust security
+
+## 📚 Research Paper
+
+This project is based on the research paper published on arXiv: [A Scale-out Decentralized Blockchain Ledger System for Web3.0](https://arxiv.org/abs/2312.00281)
+
+### Citation
+
+```bibtex
 @misc{xue2023scaleout,
     title={A Scale-out Decentralized Blockchain Ledger System for Web3.0},
     author={Lide Xue and Wei Yang and Wei Li},
@@ -17,89 +30,155 @@ Here is the [arXiv link](https://arxiv.org/abs/2312.00281). Cite this work by:
 }
 ```
 
-## Highlights
+## 🚀 Quick Start
 
-* Scalability: System throughput is directly proportional to node size, not constrained by bandwidth resources.
-* Hardware Compatibility: Designed for consumer-grade hardware, supporting necessary storage, computation, and verification requirements.
-* Efficient Transaction Confirmation: Strives to keep transaction confirmation delays within one minute.
-* Decentralization and Security: Maintains strict adherence to decentralization principles and ensures robust security​​.
+Ezchain provides two simulation modes:
 
-## Get started
+1. **NON-DST Mode**: Centralized simulation for experimental evaluation and metrics collection
+2. **DST Mode**: Distributed simulation with individual node processes (under development)
 
-This project provides two ways of initialization. The first method is designed to efficiently conduct experimental simulations, observe, and record various metrics of EZchain. All node scripts operate in a centralized manner to maximize the utilization of limited memory for simulating the operation of large-scale networks as much as possible. The second method closely resembles real distributed operation, where individual nodes run as processes with independent ports. Communication between nodes also utilizes UDP and TCP sockets. For convenience, we will refer to the first simulation as NON-DST (DST for distributed) and the second one as DST.
+### 📋 Prerequisites
 
-### Running simulation (NON-DST)
+- Python 3.8 or higher
+- pip package manager
+- Git
 
-#### Environment setup
+### 🔧 Installation
 
-Python 3.8 or higher.
-
-```
+```bash
+# Clone the repository
 git clone https://github.com/Re20Cboy/Ezchain-py.git
 
+# Navigate to the project directory
 cd Ezchain-py
 
+# Install dependencies
 pip install -r requirements.txt
 ```
 
-#### Useful configuration options
+## 🎯 Running Tutorials
 
-These are some critical configuration options in the project, which can be modified in the `const.py` file.
+### Tutorial 1: NON-DST Mode (Centralized Simulation)
 
-* SAMPLE_NEIGHBORS_NUM controls the neighbors' number of each p2p node (include consensus and account).
-* NODE_ACCOUNT_DELAY and ACC_ACC_DELAY control the delay of consensus node to account node and the delay of account node to account node (referring here to queuing delays, excluding transmission times).
-* NODE_NUM controls number of consensus nodes in NON-DST mode.
-* ACCOUNT_NUM controls number of account nodes in NON-DST mode.
-* PICK_TXNS_NUM controls the upper limit of transactions packaged at one round (block), it should theoretically not exceed ACCOUNT_NUM^2/2.
-* SIMULATE_ROUND controls the mining round.
-* BANDWIDTH controls the network's bandwidth.
-* HASH_DIFFICULTY controls the mining difficulty, i.e., the probability of successful mining in one hash computation.
-* HASH_POWER controls the hash computing power, indicating the number of hashes computation performed per second.
-* GENESIS_SENDER and GENESIS_MINER_ID represent genesis sender's address and genesis miner's ID.
+This mode runs all nodes in a centralized manner for efficient simulation and metrics collection.
 
-#### Run
+#### Step 1: Configure Parameters
 
+Edit `const.py` to adjust simulation parameters:
+
+```python
+# Network configuration
+NODE_NUM = 5                    # Number of consensus nodes
+ACCOUNT_NUM = 5                 # Number of account nodes
+SAMPLE_NEIGHBORS_NUM = 30       # P2P neighbor connections
+
+# Simulation parameters
+SIMULATE_ROUND = 10            # Mining rounds
+BANDWIDTH = 1024 * 1024 * 1    # Network bandwidth (bytes)
+HASH_DIFFICULTY = 0.0005       # Mining difficulty
+
+# Performance parameters
+NODE_ACCOUNT_DELAY = 1.5       # Node-to-account delay (seconds)
+ACC_ACC_DELAY = 1.5           # Account-to-account delay (seconds)
+PICK_TXNS_NUM = 12             # Transactions per block
 ```
+
+#### Step 2: Run Simulation
+
+```bash
+# Run the centralized simulation
 python3 Ezchain_simulate.py
-```
 
-or
-
-```
+# Alternatively
 ./Ezchain_simulate.py
 ```
 
-### Running simulation (DST, under development)
+#### Step 3: Monitor Output
 
-#### Environment setup
+The simulation will display:
+- Blockchain creation and mining progress
+- Transaction propagation and validation
+- Network communication metrics
+- Performance statistics
 
-Python 3.8 or higher.
+### Tutorial 2: DST Mode (Distributed Simulation)
 
+This mode runs individual nodes as separate processes with real network communication.
+
+#### Step 1: Configure DST Parameters
+
+Edit `const.py` for distributed mode:
+
+```python
+# DST-specific configuration
+DST_NODE_NUM = 2               # Number of consensus nodes in DST mode
+DST_ACC_NUM = 2                # Number of account nodes in DST mode
+MAX_PACKAGES = 2               # Transaction pool threshold
+ONE_HASH_TIME = 0.5            # Hash calculation time
+ONE_HASH_SUCCESS_RATE = 0.03   # Mining success rate
 ```
-git clone https://github.com/Re20Cboy/Ezchain-py.git
-cd Ezchain
-pip install -r requirements.txt
-```
 
-#### Useful configuration options
+#### Step 2: Run Distributed Simulation
 
-These are some critical configuration options in the project, which can be modified in the `const.py` file.
-
-* DST_NODE_NUM controls number of consensus nodes in DST mode.
-* DST_ACC_NUM controls number of account nodes in DST mode.
-* MAX_PACKAGES signifies the threshold at which collective packaging into blocks occurs, when the transaction pool of consensus nodes reaches MAX_PACKAGES acctxns packages.
-* ONE_HASH_TIME controls the time consumed by one hash calculation.
-* ONE_HASH_SUCCESS_RATE controls the probability of a successful hash calculation, i.e., mining difficulty.
-* The remaining parameters are as described in the NON-DST mode.
-
-#### Run
-
-```
+```bash
+# Launch the distributed system
 python3 DST_ENTRY_POINT.py
-```
 
-or
-
-```
+# Alternatively
 ./DST_ENTRY_POINT.py
 ```
+
+## ⚙️ Configuration Reference
+
+### Key Parameters in `const.py`
+
+| Parameter | Description | Default Value |
+|-----------|-------------|---------------|
+| `NODE_NUM` | Number of consensus nodes (NON-DST) | 5 |
+| `ACCOUNT_NUM` | Number of account nodes (NON-DST) | 5 |
+| `DST_NODE_NUM` | Number of consensus nodes (DST) | 2 |
+| `DST_ACC_NUM` | Number of account nodes (DST) | 2 |
+| `SIMULATE_ROUND` | Number of mining rounds | 10 |
+| `BANDWIDTH` | Network bandwidth in bytes | 1MB |
+| `HASH_DIFFICULTY` | Mining success probability | 0.0005 |
+| `PICK_TXNS_NUM` | Transactions per block | 12 |
+| `SAMPLE_NEIGHBORS_NUM` | P2P connections per node | 30 |
+
+### Performance Tuning
+
+- **For faster simulation**: Reduce `NODE_NUM`, `ACCOUNT_NUM`, and `SIMULATE_ROUND`
+- **For realistic testing**: Increase `BANDWIDTH` and adjust `HASH_DIFFICULTY`
+- **For network testing**: Modify `NODE_ACCOUNT_DELAY` and `ACC_ACC_DELAY`
+
+## 🏗️ Project Structure
+
+```
+Ezchain-py/
+├── Ezchain_simulate.py          # Main simulation script (NON-DST)
+├── DST_ENTRY_POINT.py           # Distributed system entry point (DST)
+├── const.py                     # Configuration parameters
+├── requirements.txt             # Python dependencies
+├── blockchain.py                # Blockchain core implementation
+├── node.py                      # Node logic
+├── network.py                   # Network communication
+├── transaction.py               # Transaction handling
+├── p2p_network.py              # P2P network layer
+└── website/                    # Web interface (optional)
+```
+
+## 🧪 Testing
+
+Run the test suite to verify functionality:
+
+```bash
+python3 test.py
+```
+
+## 📊 Expected Output
+
+The simulation produces:
+- Blockchain creation and mining logs
+- Transaction propagation statistics
+- Network performance metrics
+- Consensus mechanism validation results
+- Throughput and latency measurements

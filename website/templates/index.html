@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block content %}
+<section class="hero">
+    <div class="hero-container">
+        <div class="hero-content">
+            <h1 class="hero-title">Ezchain</h1>
+            <h2 class="hero-subtitle">Decentralized Scale-out Blockchain Ledger System for Web3.0</h2>
+            <p class="hero-description">
+                A novel blockchain system designed for large-scale fully decentralized networks, 
+                enabling infinite scalability while maintaining security and decentralization.
+            </p>
+            <div class="hero-buttons">
+                <a href="/blockchain" class="btn btn-primary">区块链可视化</a>
+                <a href="/features" class="btn btn-secondary">Explore Features</a>
+                <a href="/documentation" class="btn btn-secondary">Get Started</a>
+            </div>
+        </div>
+        <div class="hero-visual">
+            <div class="hero-animation">
+                <i class="fas fa-cube"></i>
+                <i class="fas fa-network-wired"></i>
+                <i class="fas fa-shield-alt"></i>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="highlights">
+    <div class="container">
+        <h2 class="section-title">Key Highlights</h2>
+        <div class="highlights-grid">
+            <div class="highlight-card">
+                <div class="highlight-icon">
+                    <i class="fas fa-chart-line"></i>
+                </div>
+                <h3>Scalability</h3>
+                <p>System throughput is directly proportional to node size, not constrained by bandwidth resources.</p>
+            </div>
+            <div class="highlight-card">
+                <div class="highlight-icon">
+                    <i class="fas fa-microchip"></i>
+                </div>
+                <h3>Hardware Compatibility</h3>
+                <p>Designed for consumer-grade hardware, supporting necessary storage, computation, and verification requirements.</p>
+            </div>
+            <div class="highlight-card">
+                <div class="highlight-icon">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <h3>Efficient Transaction Confirmation</h3>
+                <p>Strives to keep transaction confirmation delays within one minute.</p>
+            </div>
+            <div class="highlight-card">
+                <div class="highlight-icon">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h3>Decentralization and Security</h3>
+                <p>Maintains strict adherence to decentralization principles and ensures robust security.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta">
+    <div class="container">
+        <div class="cta-content">
+            <h2>Ready to get started?</h2>
+            <p>Join the future of decentralized blockchain technology with Ezchain.</p>
+            <div class="cta-buttons">
+                <a href="/documentation" class="btn btn-primary">Read Documentation</a>
+                <a href="https://github.com/Re20Cboy/Ezchain-py" target="_blank" class="btn btn-secondary">View on GitHub</a>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
