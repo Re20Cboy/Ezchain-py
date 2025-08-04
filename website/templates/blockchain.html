@@ -28,8 +28,11 @@
                         <div class="col-md-3">
                             <button id="stopMiningBtn" class="btn btn-danger btn-block" disabled>停止挖矿</button>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-2">
                             <button id="refreshBtn" class="btn btn-info btn-block">刷新状态</button>
+                        </div>
+                        <div class="col-md-2">
+                            <button id="resetBtn" class="btn btn-warning btn-block">重置系统</button>
                         </div>
                     </div>
                 </div>
@@ -39,7 +42,7 @@
 
     <!-- 统计信息 -->
     <div class="row mb-4">
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card text-white bg-primary">
                 <div class="card-body">
                     <h5 class="card-title">总区块数</h5>
@@ -47,7 +50,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card text-white bg-success">
                 <div class="card-body">
                     <h5 class="card-title">总交易数</h5>
@@ -55,7 +58,7 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card text-white bg-warning">
                 <div class="card-body">
                     <h5 class="card-title">挖矿速度</h5>
@@ -64,12 +67,28 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <div class="card text-white bg-info">
                 <div class="card-body">
                     <h5 class="card-title">网络算力</h5>
                     <h2 id="networkHashrate">0</h2>
                     <small>H/s</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-white bg-secondary">
+                <div class="card-body">
+                    <h5 class="card-title">节点数</h5>
+                    <h2 id="nodeCount">0</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-2">
+            <div class="card text-white bg-dark">
+                <div class="card-body">
+                    <h5 class="card-title">账户数</h5>
+                    <h2 id="accountCount">0</h2>
                 </div>
             </div>
         </div>
@@ -145,14 +164,14 @@
                 <div class="card-body">
                     <form id="transactionForm">
                         <div class="form-group">
-                            <label for="sender">发送方地址</label>
-                            <select class="form-control" id="sender" required>
+                            <label for="sender">发送方账户</label>
+                            <select class="form-control" id="sender_id" required>
                                 <option value="">选择发送方</option>
                             </select>
                         </div>
                         <div class="form-group">
-                            <label for="recipient">接收方地址</label>
-                            <select class="form-control" id="recipient" required>
+                            <label for="recipient">接收方账户</label>
+                            <select class="form-control" id="recipient_id" required>
                                 <option value="">选择接收方</option>
                             </select>
                         </div>
@@ -236,6 +255,7 @@ function initializeEventListeners() {
     document.getElementById('startMiningBtn').addEventListener('click', startMining);
     document.getElementById('stopMiningBtn').addEventListener('click', stopMining);
     document.getElementById('refreshBtn').addEventListener('click', updateStatus);
+    document.getElementById('resetBtn').addEventListener('click', resetBlockchain);
     document.getElementById('transactionForm').addEventListener('submit', createTransaction);
 }
 
@@ -317,23 +337,26 @@ async function stopMining() {
 // 更新状态
 async function updateStatus() {
     try {
-        const [statsResponse, blocksResponse, accountsResponse, transactionsResponse] = await Promise.all([
+        const [statsResponse, blocksResponse, accountsResponse, transactionsResponse, nodesResponse] = await Promise.all([
             fetch('/api/blockchain/stats'),
             fetch('/api/blockchain/blocks'),
             fetch('/api/accounts'),
-            fetch('/api/transactions')
+            fetch('/api/transactions'),
+            fetch('/api/nodes')
         ]);
         
         const stats = await statsResponse.json();
         const blocks = await blocksResponse.json();
         const accounts = await accountsResponse.json();
         const transactions = await transactionsResponse.json();
+        const nodes = await nodesResponse.json();
         
         updateStatistics(stats);
         updateBlockchainVisualization(blocks.blocks);
         updateBlocksTable(blocks.blocks);
         updateAccountsSelect(accounts.accounts);
         updateRecentTransactions(transactions.transactions);
+        updateNodesInfo(nodes.nodes);
         
         if (miningInProgress) {
             updateMiningStatus();
@@ -350,6 +373,8 @@ function updateStatistics(stats) {
     document.getElementById('totalTransactions').textContent = stats.total_transactions || 0;
     document.getElementById('miningSpeed').textContent = (stats.mining_speed || 0).toFixed(2);
     document.getElementById('networkHashrate').textContent = (stats.network_hashrate || 0).toLocaleString();
+    document.getElementById('nodeCount').textContent = stats.node_count || 0;
+    document.getElementById('accountCount').textContent = stats.account_count || 0;
 }
 
 // 更新区块链可视化
@@ -409,15 +434,21 @@ function updateBlocksTable(blocks) {
 
 // 更新账户选择器
 function updateAccountsSelect(accounts) {
-    const senderSelect = document.getElementById('sender');
-    const recipientSelect = document.getElementById('recipient');
+    const senderSelect = document.getElementById('sender_id');
+    const recipientSelect = document.getElementById('recipient_id');
     
     const options = accounts.map(account => 
-        `<option value="${account.address}">账户 ${account.id} (${account.address.substring(0, 8)}...)</option>`
+        `<option value="${account.id}">账户 ${account.id} (余额: ${account.balance})</option>`
     ).join('');
     
     senderSelect.innerHTML = '<option value="">选择发送方</option>' + options;
     recipientSelect.innerHTML = '<option value="">选择接收方</option>' + options;
+}
+
+// 更新节点信息
+function updateNodesInfo(nodes) {
+    // 这里可以添加节点信息的显示逻辑
+    console.log('节点信息:', nodes);
 }
 
 // 更新最近交易
@@ -449,16 +480,16 @@ function updateRecentTransactions(transactions) {
 async function createTransaction(event) {
     event.preventDefault();
     
-    const sender = document.getElementById('sender').value;
-    const recipient = document.getElementById('recipient').value;
+    const sender_id = document.getElementById('sender_id').value;
+    const recipient_id = document.getElementById('recipient_id').value;
     const amount = document.getElementById('amount').value;
     
-    if (!sender || !recipient || !amount) {
+    if (!sender_id || !recipient_id || !amount) {
         showNotification('请填写所有字段', 'error');
         return;
     }
     
-    if (sender === recipient) {
+    if (sender_id === recipient_id) {
         showNotification('发送方和接收方不能相同', 'error');
         return;
     }
@@ -470,8 +501,8 @@ async function createTransaction(event) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                sender: sender,
-                recipient: recipient,
+                sender_id: parseInt(sender_id),
+                recipient_id: parseInt(recipient_id),
                 amount: parseInt(amount)
             })
         });
@@ -553,6 +584,36 @@ function updateButtonStates() {
     document.getElementById('initBtn').disabled = blockchainInitialized;
     document.getElementById('startMiningBtn').disabled = !blockchainInitialized || miningInProgress;
     document.getElementById('stopMiningBtn').disabled = !miningInProgress;
+}
+
+// 重置区块链
+async function resetBlockchain() {
+    if (!confirm('确定要重置整个区块链系统吗？这将清除所有数据。')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/blockchain/reset', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            blockchainInitialized = false;
+            miningInProgress = false;
+            updateButtonStates();
+            updateStatus();
+            showNotification('区块链已重置！', 'success');
+        } else {
+            showNotification(data.message, 'error');
+        }
+    } catch (error) {
+        showNotification('重置失败：' + error.message, 'error');
+    }
 }
 
 // 显示通知
